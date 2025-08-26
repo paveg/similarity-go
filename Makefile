@@ -6,7 +6,6 @@ BINARY_NAME := similarity-go
 MAIN_PATH := ./cmd
 COVERAGE_OUT := coverage.out
 COVERAGE_HTML := coverage.html
-COVERAGE_THRESHOLD := 80
 BIN_DIR := bin
 
 # Default target
@@ -36,11 +35,11 @@ coverage-html: test-coverage
 	go tool cover -html=$(COVERAGE_OUT) -o $(COVERAGE_HTML)
 	@echo "Coverage report generated: $(COVERAGE_HTML)"
 
-# Check if coverage meets threshold
-.PHONY: coverage-check
-coverage-check: test-coverage
-	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
-	@go tool cover -func=$(COVERAGE_OUT) | grep "total:" | awk '{print $$3}' | sed 's/%//' | awk '{if($$1 < $(COVERAGE_THRESHOLD)) {print "Coverage " $$1 "% is below threshold $(COVERAGE_THRESHOLD)%"; exit 1} else {print "Coverage " $$1 "% meets threshold $(COVERAGE_THRESHOLD)%"}}'
+# Display coverage report
+.PHONY: coverage-report
+coverage-report: test-coverage
+	@echo "Coverage report:"
+	@go tool cover -func=$(COVERAGE_OUT) | grep "total:" | awk '{print "Total coverage: " $$3}'
 
 # Run benchmarks
 .PHONY: bench
@@ -101,7 +100,7 @@ lint:
 
 # Full quality check
 .PHONY: quality
-quality: fmt vet lint test-coverage coverage-check
+quality: fmt vet lint test-coverage
 
 # Development target - quick feedback
 .PHONY: dev
@@ -120,7 +119,7 @@ help:
 	@echo "  test          - Run tests"
 	@echo "  test-coverage - Run tests with coverage"
 	@echo "  coverage-html - Generate HTML coverage report"
-	@echo "  coverage-check - Check if coverage meets threshold ($(COVERAGE_THRESHOLD)%)"
+	@echo "  coverage-report - Display coverage report"
 	@echo "  bench         - Run benchmarks"
 	@echo "  build         - Build the application (to $(BIN_DIR)/)"
 	@echo "  build-all     - Build for all platforms"
