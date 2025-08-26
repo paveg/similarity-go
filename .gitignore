@@ -21,6 +21,9 @@ go.work.sum
 /build/
 /target/
 
+# Project specific binaries
+/similarity-go
+
 # Compiled Object files
 *.o
 *.a
@@ -58,6 +61,7 @@ race.out
 
 # VSCode
 .vscode/
+!.vscode/settings.json
 *.code-workspace
 
 # GoLand/IntelliJ
@@ -175,3 +179,6 @@ debug.test
 
 # Air live reloading
 .air/
+
+# MCP servers' configuration
+.serena

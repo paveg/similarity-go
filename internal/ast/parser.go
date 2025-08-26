@@ -67,7 +67,9 @@ func (p *Parser) ParseFile(filename string) types.Result[*ParseResult] {
 // This method continues processing even if some files fail, collecting all errors.
 func (p *Parser) ParseFiles(filenames []string) types.Result[*ParseResult] {
 	var allFunctions []*Function
+
 	var allErrors []error
+
 	successCount := 0
 
 	for _, filename := range filenames {
@@ -97,8 +99,7 @@ func (p *Parser) extractFunctions(file *ast.File, filename string) []*Function {
 	var functions []*Function
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		switch node := n.(type) {
-		case *ast.FuncDecl:
+		if node, ok := n.(*ast.FuncDecl); ok {
 			// Skip interface method declarations (they have no body)
 			if node.Body == nil {
 				return true
@@ -107,6 +108,7 @@ func (p *Parser) extractFunctions(file *ast.File, filename string) []*Function {
 			fn := p.createFunction(node, filename)
 			functions = append(functions, fn)
 		}
+
 		return true
 	})
 

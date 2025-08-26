@@ -56,7 +56,7 @@ func TestResult_Err(t *testing.T) {
 				t.Errorf("Expected IsErr() to be true")
 			}
 
-			if result.Error() != tt.err {
+			if !errors.Is(result.Error(), tt.err) {
 				t.Errorf("Expected error %v, got %v", tt.err, result.Error())
 			}
 		})
@@ -140,6 +140,7 @@ func TestResult_AndThen(t *testing.T) {
 		if x%2 != 0 {
 			return Err[int](errors.New("odd number"))
 		}
+
 		return Ok(x / 2)
 	}
 

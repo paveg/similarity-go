@@ -1,0 +1,34 @@
+{
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": false,
+    "editor.tabSize": 4
+  },
+  "[makefile]": {
+    "editor.insertSpaces": false,
+    "editor.detectIndentation": false
+  },
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": [
+    "--fast-only"
+  ],
+  "go.formatTool": "custom",
+  "go.alternateTools": {
+    "customFormatter": "golangci-lint"
+  },
+  "go.formatFlags": [
+    "fmt",
+    "--stdin"
+  ],
+  "yaml.schemas": {
+    "https://json.schemastore.org/golangci-lint": ".golangci.yml"
+  },
+  "yaml.validate": true
+}

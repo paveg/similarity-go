@@ -45,17 +45,21 @@ func divide(a, b int) (int, error) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fileSet := token.NewFileSet()
+
 			file, err := parser.ParseFile(fileSet, "test.go", tt.source, 0)
 			if err != nil {
 				t.Fatalf("Failed to parse source: %v", err)
 			}
 
 			var funcDecl *ast.FuncDecl
+
 			ast.Inspect(file, func(n ast.Node) bool {
 				if fd, ok := n.(*ast.FuncDecl); ok && fd.Name.Name != "main" {
 					funcDecl = fd
+
 					return false
 				}
+
 				return true
 			})
 
@@ -86,17 +90,21 @@ func add(a, b int) int {
 }`
 
 	fileSet := token.NewFileSet()
+
 	file, err := parser.ParseFile(fileSet, "test.go", source, 0)
 	if err != nil {
 		t.Fatalf("Failed to parse source: %v", err)
 	}
 
 	var funcDecl *ast.FuncDecl
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		if fd, ok := n.(*ast.FuncDecl); ok && fd.Name.Name == "add" {
 			funcDecl = fd
+
 			return false
 		}
+
 		return true
 	})
 
@@ -203,25 +211,177 @@ func add(x, y int) int {
 	if hash2 == "" {
 		t.Error("Expected non-empty hash for function 2")
 	}
-
 	// Same structure with different variable names should have same hash after normalization
 	// This will be implemented when we add the Hash method
 }
 
-// Helper functions
+func TestFunction_Normalize(t *testing.T) {
+	source := `package main
+func add(a, b int) int {
+	return a + b
+}`
+
+	fn := createFunctionFromSource(t, source, "add")
+
+	// Test first call to Normalize
+	normalized1 := fn.Normalize()
+	if normalized1 == nil {
+		t.Error("Expected non-nil normalized function")
+	}
+
+	if normalized1.Name != fn.Name {
+		t.Errorf("Expected name %s, got %s", fn.Name, normalized1.Name)
+	}
+
+	// Test second call returns cached version
+	fn.Normalized = fn.AST // Simulate cached normalization
+
+	normalized2 := fn.Normalize()
+	if normalized2 == nil {
+		t.Error("Expected non-nil normalized function from cache")
+	}
+
+	if normalized2.Name != fn.Name {
+		t.Errorf("Expected cached name %s, got %s", fn.Name, normalized2.Name)
+	}
+}
+
+func TestFunction_GetSignature_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		function *Function
+		expected string
+	}{
+		{
+			name: "function with nil AST",
+			function: &Function{
+				Name: "test",
+				File: "test.go",
+				AST:  nil,
+			},
+			expected: "func()",
+		},
+		{
+			name: "function with AST but nil Type",
+			function: &Function{
+				Name: "test",
+				File: "test.go",
+				AST:  &ast.FuncDecl{Type: nil},
+			},
+			expected: "func()",
+		},
+		{
+			name: "function with cached signature",
+			function: &Function{
+				Name:      "test",
+				File:      "test.go",
+				signature: "cached_signature",
+			},
+			expected: "cached_signature",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.function.GetSignature()
+			if got != tt.expected {
+				t.Errorf("Expected signature %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestFunction_GetSource_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		function       *Function
+		expectedSource string
+		expectError    bool
+	}{
+		{
+			name: "function with nil AST",
+			function: &Function{
+				Name: "test",
+				File: "test.go",
+				AST:  nil,
+			},
+			expectedSource: "",
+			expectError:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source, err := tt.function.GetSource()
+			if tt.expectError && err == nil {
+				t.Error("Expected error but got none")
+			}
+
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			if source != tt.expectedSource {
+				t.Errorf("Expected source %q, got %q", tt.expectedSource, source)
+			}
+		})
+	}
+}
+
+func TestFunction_Hash_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		function *Function
+		expected string
+	}{
+		{
+			name: "function with nil AST returns placeholder",
+			function: &Function{
+				Name: "test",
+				File: "test.go",
+				AST:  nil,
+			},
+			expected: "placeholder_hash",
+		},
+		{
+			name: "function with cached hash",
+			function: &Function{
+				Name: "test",
+				File: "test.go",
+				hash: "cached_hash",
+			},
+			expected: "cached_hash",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.function.Hash()
+			if got != tt.expected {
+				t.Errorf("Expected hash %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
+// Helper functions.
 func createFunctionFromSource(t *testing.T, source, funcName string) *Function {
 	fileSet := token.NewFileSet()
+
 	file, err := parser.ParseFile(fileSet, "test.go", source, 0)
 	if err != nil {
 		t.Fatalf("Failed to parse source: %v", err)
 	}
 
 	var funcDecl *ast.FuncDecl
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		if fd, ok := n.(*ast.FuncDecl); ok && fd.Name.Name == funcName {
 			funcDecl = fd
+
 			return false
 		}
+
 		return true
 	})
 
@@ -240,18 +400,22 @@ func createFunctionFromSource(t *testing.T, source, funcName string) *Function {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsAt(s, substr, 1)))
+	return len(s) >= len(substr) &&
+		(s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsAt(s, substr, 1)))
 }
 
 func containsAt(s, substr string, start int) bool {
 	if start >= len(s) {
 		return false
 	}
+
 	if start+len(substr) > len(s) {
 		return containsAt(s, substr, start+1)
 	}
+
 	if s[start:start+len(substr)] == substr {
 		return true
 	}
+
 	return containsAt(s, substr, start+1)
 }
