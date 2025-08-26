@@ -21,6 +21,9 @@ go.work.sum
 /build/
 /target/
 
+# Project specific binaries
+/similarity-go
+
 # Compiled Object files
 *.o
 *.a

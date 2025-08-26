@@ -32,6 +32,7 @@ func (o Optional[T]) Unwrap() T {
 	if o.value == nil {
 		panic("called Unwrap on None value")
 	}
+
 	return *o.value
 }
 
@@ -40,6 +41,7 @@ func (o Optional[T]) UnwrapOr(defaultValue T) T {
 	if o.value == nil {
 		return defaultValue
 	}
+
 	return *o.value
 }
 
@@ -48,6 +50,7 @@ func MapOptional[T, U any](o Optional[T], mapper func(T) U) Optional[U] {
 	if o.value == nil {
 		return None[U]()
 	}
+
 	return Some(mapper(*o.value))
 }
 
@@ -57,6 +60,7 @@ func Filter[T any](o Optional[T], predicate func(T) bool) Optional[T] {
 	if o.value == nil || !predicate(*o.value) {
 		return None[T]()
 	}
+
 	return o
 }
 
@@ -66,5 +70,6 @@ func AndThenOptional[T, U any](o Optional[T], f func(T) Optional[U]) Optional[U]
 	if o.value == nil {
 		return None[U]()
 	}
+
 	return f(*o.value)
 }

@@ -1,0 +1,42 @@
+# Codecov configuration file
+# https://docs.codecov.io/docs/codecov-yaml
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        base: auto
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+  ignore:
+    - "testdata/**/*"
+    - "**/*_test.go"
+    - "**/test*.go"
+    - "cmd/main.go"        # Simple main function
+    - "docs/**/*"
+    - "*.md"
+
+comment:
+  layout: "reach,diff,flags,tree,reach"
+  behavior: default
+  require_changes: false
+
+github_checks:
+  annotations: true
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no

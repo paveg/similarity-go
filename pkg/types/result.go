@@ -33,6 +33,7 @@ func (r Result[T]) Unwrap() T {
 	if r.err != nil {
 		panic(r.err)
 	}
+
 	return *r.value
 }
 
@@ -41,6 +42,7 @@ func (r Result[T]) UnwrapOr(defaultValue T) T {
 	if r.err != nil {
 		return defaultValue
 	}
+
 	return *r.value
 }
 
@@ -54,6 +56,7 @@ func Map[T, U any](r Result[T], mapper func(T) U) Result[U] {
 	if r.err != nil {
 		return Err[U](r.err)
 	}
+
 	return Ok(mapper(*r.value))
 }
 
@@ -63,5 +66,6 @@ func AndThen[T, U any](r Result[T], f func(T) Result[U]) Result[U] {
 	if r.err != nil {
 		return Err[U](r.err)
 	}
+
 	return f(*r.value)
 }

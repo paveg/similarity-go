@@ -29,16 +29,19 @@ func (f *Function) GetSignature() string {
 
 	if f.AST == nil || f.AST.Type == nil {
 		f.signature = "func()"
+
 		return f.signature
 	}
 
 	var buf bytes.Buffer
 	if err := format.Node(&buf, token.NewFileSet(), f.AST.Type); err != nil {
 		f.signature = "func()"
+
 		return f.signature
 	}
 
 	f.signature = buf.String()
+
 	return f.signature
 }
 
@@ -49,6 +52,7 @@ func (f *Function) GetSource() (string, error) {
 	}
 
 	var buf bytes.Buffer
+
 	err := format.Node(&buf, token.NewFileSet(), f.AST)
 	if err != nil {
 		return "", err
@@ -83,6 +87,7 @@ func (f *Function) Hash() string {
 	// TODO: Implement structural hashing
 	// For now, return a placeholder
 	f.hash = "placeholder_hash"
+
 	return f.hash
 }
 
@@ -104,5 +109,6 @@ func (f *Function) Normalize() *Function {
 	// TODO: Implement normalization
 	// For now, return a copy
 	f.Normalized = f.AST
+
 	return f
 }

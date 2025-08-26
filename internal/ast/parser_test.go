@@ -140,6 +140,7 @@ var globalVar = "test"
 				if result.IsOk() {
 					t.Errorf("Expected error, but parsing succeeded")
 				}
+
 				return
 			}
 
@@ -167,21 +168,27 @@ var globalVar = "test"
 				if fn.Name == "" {
 					t.Error("Function name should not be empty")
 				}
+
 				if fn.File != tmpFile {
 					t.Errorf("Expected file %s, got %s", tmpFile, fn.File)
 				}
+
 				if fn.StartLine <= 0 {
 					t.Error("StartLine should be positive")
 				}
+
 				if fn.EndLine <= 0 {
 					t.Error("EndLine should be positive")
 				}
+
 				if fn.StartLine > fn.EndLine {
 					t.Errorf("StartLine (%d) should not be greater than EndLine (%d)", fn.StartLine, fn.EndLine)
 				}
+
 				if fn.AST == nil {
 					t.Error("AST should not be nil")
 				}
+
 				if fn.LineCount <= 0 {
 					t.Error("LineCount should be positive")
 				}
@@ -265,6 +272,7 @@ var x = 1`
 	file1 := createTempFile(t, source1)
 	file2 := createTempFile(t, source2)
 	file3 := createTempFile(t, source3)
+
 	defer func() {
 		os.Remove(file1)
 		os.Remove(file2)
@@ -412,7 +420,7 @@ func TestParser_NewParser(t *testing.T) {
 	}
 }
 
-// Helper functions
+// Helper functions.
 func createTempFile(t *testing.T, content string) string {
 	tmpFile, err := os.CreateTemp("", "test_*.go")
 	if err != nil {
@@ -434,10 +442,12 @@ func stringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
 	for i, v := range a {
 		if v != b[i] {
 			return false
 		}
 	}
+
 	return true
 }

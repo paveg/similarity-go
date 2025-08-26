@@ -161,6 +161,7 @@ func TestOptional_AndThen(t *testing.T) {
 		if x == 0 {
 			return None[int]()
 		}
+
 		return Some(100 / x)
 	}
 
