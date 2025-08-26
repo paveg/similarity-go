@@ -1,5 +1,5 @@
 # golangci-lint v2.x configuration
-version: 2
+version: "2"
 
 run:
   timeout: 5m
@@ -9,8 +9,7 @@ run:
   allow-parallel-runners: true
 
 output:
-  formats:
-    colored-line-number: stdout
+  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
   uniq-by-line: true
@@ -34,7 +33,6 @@ linters-settings:
   funlen:
     lines: 60
     statements: 40
-  # Formatter settings moved here from linters-settings
   gocognit:
     min-complexity: 15
   gocyclo:
@@ -59,7 +57,7 @@ linters-settings:
     severity: medium
     confidence: medium
     excludes:
-      - G304  # File path provided as taint input
+      - G304
   govet:
     settings:
       printf:
@@ -299,10 +297,11 @@ formatters:
       extra-rules: true
 
 issues:
-  exclude-dirs:
-    - testdata
-  exclude-files:
-    - ".*_test\\.go"
+  exclude-use-default: true
+  exclude:
+    - "SA9003:"
+    - "SA1019: .* is deprecated"
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print.*|os\\.(Un)?Setenv). is not checked"
   exclude-rules:
     - path: _test\.go
       linters:
@@ -335,17 +334,12 @@ issues:
     - text: "should have a package comment"
       linters:
         - stylecheck
-    - text: "G304:" # File path provided as taint input
+    - text: "G304:"
       linters:
         - gosec
     - source: "^\\s*//\\s*(TODO|FIXME|BUG)"
       linters:
         - godox
-  exclude-use-default: true
-  exclude:
-    - "SA9003:"
-    - "SA1019: .* is deprecated"
-    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print.*|os\\.(Un)?Setenv). is not checked"
   max-issues-per-linter: 50
   max-same-issues: 10
   new: false
