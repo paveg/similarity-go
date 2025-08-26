@@ -3,14 +3,66 @@ version: "2"
 
 run:
   timeout: 5m
+  issues-exit-code: 1
   tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
 
 linters:
   enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - cyclop
+    - dupl
+    - durationcheck
     - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - misspell
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
     - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - goheader
+    - goimports
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - govet
+    - importas
+    - ineffassign
+    - lll
+    - maintidx
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - nolintlint
+    - nonamedreturns
+    - predeclared
+    - reassign
+    - revive
+    - staticcheck
+    - stylecheck
+    - testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  new: false
