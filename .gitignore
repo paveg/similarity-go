@@ -61,6 +61,7 @@ race.out
 
 # VSCode
 .vscode/
+!.vscode/settings.json
 *.code-workspace
 
 # GoLand/IntelliJ
