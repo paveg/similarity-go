@@ -175,3 +175,6 @@ debug.test
 
 # Air live reloading
 .air/
+
+# MCP servers' configuration
+.serena
