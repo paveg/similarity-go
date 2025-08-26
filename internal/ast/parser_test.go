@@ -422,7 +422,7 @@ func TestParser_NewParser(t *testing.T) {
 
 // Helper functions.
 func createTempFile(t *testing.T, content string) string {
-	tmpFile, err := os.CreateTemp("", "test_*.go")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test_*.go")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
