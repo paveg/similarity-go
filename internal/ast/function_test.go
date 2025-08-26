@@ -19,7 +19,7 @@ func TestFunction_GetSignature(t *testing.T) {
 func add(a, b int) int {
 	return a + b
 }`,
-			expected: "func(a int, b int) int",
+			expected: "func(a, b int) int",
 		},
 		{
 			name: "function with no parameters",
@@ -38,7 +38,7 @@ func divide(a, b int) (int, error) {
 	}
 	return a / b, nil
 }`,
-			expected: "func(a int, b int) (int, error)",
+			expected: "func(a, b int) (int, error)",
 		},
 	}
 
