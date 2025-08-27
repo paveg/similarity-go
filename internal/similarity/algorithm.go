@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/paveg/similarity-go/internal/ast"
+	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
 // TreeEditDistance calculates the edit distance between two AST nodes.
@@ -32,7 +33,7 @@ func TreeEditDistance(node1, node2 goast.Node) int {
 	insertionCost := 1 + TreeEditDistance(nil, node2)
 	deletionCost := 1 + TreeEditDistance(node1, nil)
 
-	return minInt(substitutionCost, minInt(insertionCost, deletionCost))
+	return mathutil.Min(substitutionCost, mathutil.Min(insertionCost, deletionCost))
 }
 
 // TokenSequenceSimilarity calculates similarity between two functions based on token sequences.
@@ -63,7 +64,7 @@ func TokenSequenceSimilarity(func1, func2 *ast.Function) float64 {
 
 	// Calculate Levenshtein distance between token sequences
 	distance := LevenshteinDistance(strings.Join(tokens1, " "), strings.Join(tokens2, " "))
-	maxLen := maxInt(len(strings.Join(tokens1, " ")), len(strings.Join(tokens2, " ")))
+	maxLen := mathutil.Max(len(strings.Join(tokens1, " ")), len(strings.Join(tokens2, " ")))
 
 	if maxLen == 0 {
 		return 1.0
@@ -109,9 +110,9 @@ func LevenshteinDistance(s1, s2 string) int {
 				cost = 1
 			}
 
-			matrix[i][j] = minInt(
+			matrix[i][j] = mathutil.Min(
 				matrix[i-1][j]+1, // deletion
-				minInt(
+				mathutil.Min(
 					matrix[i][j-1]+1,      // insertion
 					matrix[i-1][j-1]+cost, // substitution
 				),
@@ -298,7 +299,7 @@ func calculateChildrenDistance(node1, node2 goast.Node) int {
 	}
 
 	// Simple algorithm: calculate distance for each pair of children
-	maxLen := maxInt(len(children1), len(children2))
+	maxLen := mathutil.Max(len(children1), len(children2))
 	totalDistance := 0
 
 	for i := range maxLen {
@@ -404,17 +405,4 @@ func getNodeChildren(node goast.Node) []goast.Node {
 	return children
 }
 
-// Helper functions.
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
+// Helper functions have been moved to pkg/mathutil package.
