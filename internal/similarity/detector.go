@@ -12,6 +12,13 @@ import (
 	"github.com/paveg/similarity-go/internal/ast"
 )
 
+const (
+	// Similarity thresholds and weights.
+	defaultSimilarOperationsThreshold = 0.5
+	differentSignatureWeight          = 0.3
+	statementCountDifferencePenalty   = 0.5
+)
+
 // Detector handles similarity detection between functions.
 type Detector struct {
 	threshold float64
@@ -229,10 +236,10 @@ func (d *Detector) calculateStructuralSimilarity(func1, func2 *ast.Function) flo
 	// If functions have different signatures but similar body structure,
 	// return lower similarity based on the operation similarity
 	if bodyScore > 0.7 && d.hasSimilarOperations(func1, func2) {
-		return 0.5
+		return defaultSimilarOperationsThreshold
 	}
 
-	return bodyScore * 0.3 // Different signatures result in lower similarity
+	return bodyScore * differentSignatureWeight // Different signatures result in lower similarity
 }
 
 // calculateSignatureSimilarity compares function signatures.
@@ -314,7 +321,7 @@ func (d *Detector) compareBodyStructure(body1, body2 *goast.BlockStmt) float64 {
 
 	// Simple structural comparison based on statement counts and types
 	if len(body1.List) != len(body2.List) {
-		return 0.5 // Different number of statements
+		return statementCountDifferencePenalty // Different number of statements
 	}
 
 	matches := 0
@@ -413,7 +420,7 @@ func (d *Detector) hasBinaryExpressions(body *goast.BlockStmt) bool {
 	for _, stmt := range body.List {
 		if retStmt, ok := stmt.(*goast.ReturnStmt); ok {
 			for _, result := range retStmt.Results {
-				if _, ok := result.(*goast.BinaryExpr); ok {
+				if _, isBinaryExpr := result.(*goast.BinaryExpr); isBinaryExpr {
 					return true
 				}
 			}

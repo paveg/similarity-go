@@ -32,7 +32,7 @@ func TreeEditDistance(node1, node2 goast.Node) int {
 	insertionCost := 1 + TreeEditDistance(nil, node2)
 	deletionCost := 1 + TreeEditDistance(node1, nil)
 
-	return min(substitutionCost, min(insertionCost, deletionCost))
+	return minInt(substitutionCost, minInt(insertionCost, deletionCost))
 }
 
 // TokenSequenceSimilarity calculates similarity between two functions based on token sequences.
@@ -63,7 +63,7 @@ func TokenSequenceSimilarity(func1, func2 *ast.Function) float64 {
 
 	// Calculate Levenshtein distance between token sequences
 	distance := LevenshteinDistance(strings.Join(tokens1, " "), strings.Join(tokens2, " "))
-	maxLen := max(len(strings.Join(tokens1, " ")), len(strings.Join(tokens2, " ")))
+	maxLen := maxInt(len(strings.Join(tokens1, " ")), len(strings.Join(tokens2, " ")))
 
 	if maxLen == 0 {
 		return 1.0
@@ -109,9 +109,9 @@ func LevenshteinDistance(s1, s2 string) int {
 				cost = 1
 			}
 
-			matrix[i][j] = min(
+			matrix[i][j] = minInt(
 				matrix[i-1][j]+1, // deletion
-				min(
+				minInt(
 					matrix[i][j-1]+1,      // insertion
 					matrix[i-1][j-1]+cost, // substitution
 				),
@@ -177,7 +177,19 @@ func tokenizeAndNormalize(source string) []string {
 		case token.STRING:
 			// Replace all string literals with generic STRING
 			tokens = append(tokens, "STRING")
-		default:
+		case token.ILLEGAL, token.EOF, token.COMMENT, token.IMAG, token.CHAR,
+			token.ADD, token.SUB, token.MUL, token.QUO, token.REM,
+			token.AND, token.OR, token.XOR, token.SHL, token.SHR, token.AND_NOT,
+			token.ADD_ASSIGN, token.SUB_ASSIGN, token.MUL_ASSIGN, token.QUO_ASSIGN, token.REM_ASSIGN,
+			token.AND_ASSIGN, token.OR_ASSIGN, token.XOR_ASSIGN, token.SHL_ASSIGN, token.SHR_ASSIGN, token.AND_NOT_ASSIGN,
+			token.LAND, token.LOR, token.ARROW, token.INC, token.DEC,
+			token.EQL, token.LSS, token.GTR, token.ASSIGN, token.NOT, token.NEQ, token.LEQ, token.GEQ, token.DEFINE,
+			token.ELLIPSIS, token.LPAREN, token.LBRACK, token.LBRACE, token.COMMA, token.PERIOD,
+			token.RPAREN, token.RBRACK, token.RBRACE, token.SEMICOLON, token.COLON,
+			token.BREAK, token.CASE, token.CHAN, token.CONST, token.CONTINUE, token.DEFAULT, token.DEFER,
+			token.ELSE, token.FALLTHROUGH, token.FOR, token.FUNC, token.GO, token.GOTO, token.IF,
+			token.IMPORT, token.INTERFACE, token.MAP, token.PACKAGE, token.RANGE, token.RETURN,
+			token.SELECT, token.STRUCT, token.SWITCH, token.TYPE, token.VAR, token.TILDE:
 			// Keep operators, keywords, and punctuation as-is
 			if lit != "" {
 				tokens = append(tokens, lit)
@@ -284,7 +296,7 @@ func calculateChildrenDistance(node1, node2 goast.Node) int {
 	}
 
 	// Simple algorithm: calculate distance for each pair of children
-	maxLen := max(len(children1), len(children2))
+	maxLen := maxInt(len(children1), len(children2))
 	totalDistance := 0
 
 	for i := range maxLen {
@@ -389,14 +401,14 @@ func getNodeChildren(node goast.Node) []goast.Node {
 }
 
 // Helper functions.
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}
