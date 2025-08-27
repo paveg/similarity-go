@@ -2,6 +2,9 @@ package ast
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/token"
@@ -78,15 +81,47 @@ func (f *Function) IsValid(minLines int) bool {
 }
 
 // Hash returns a structural hash of the function for quick comparison.
-// This will be implemented when we add the hasher component.
 func (f *Function) Hash() string {
 	if f.hash != "" {
 		return f.hash
 	}
 
-	// TODO: Implement structural hashing
-	// For now, return a placeholder
-	f.hash = "placeholder_hash"
+	if f.AST == nil {
+		// Include function name in hash even for nil AST
+		hashComponents := []string{
+			f.Name,
+			f.GetSignature(),
+			fmt.Sprintf("lines:%d-%d", f.StartLine, f.EndLine),
+			fmt.Sprintf("count:%d", f.LineCount),
+			"nil_ast",
+		}
+
+		combined := fmt.Sprintf("%v", hashComponents)
+		hasher := sha256.New()
+		hasher.Write([]byte(combined))
+		f.hash = hex.EncodeToString(hasher.Sum(nil))[:16]
+
+		return f.hash
+	}
+
+	// Create a structural hash based on function signature and basic structure
+	hashComponents := []string{
+		f.Name,
+		f.GetSignature(),
+		fmt.Sprintf("lines:%d-%d", f.StartLine, f.EndLine),
+		fmt.Sprintf("count:%d", f.LineCount),
+	}
+
+	// Add body structure if available
+	if f.AST.Body != nil {
+		hashComponents = append(hashComponents, fmt.Sprintf("stmts:%d", len(f.AST.Body.List)))
+	}
+
+	// Combine all components and create SHA256 hash
+	combined := fmt.Sprintf("%v", hashComponents)
+	hasher := sha256.New()
+	hasher.Write([]byte(combined))
+	f.hash = hex.EncodeToString(hasher.Sum(nil))[:16] // Use first 16 chars for readability
 
 	return f.hash
 }
@@ -106,9 +141,21 @@ func (f *Function) Normalize() *Function {
 		}
 	}
 
-	// TODO: Implement normalization
-	// For now, return a copy
+	if f.AST == nil {
+		return f
+	}
+
+	// Create a normalized copy by removing variable names and other non-structural elements
+	// For now, use the original AST as a placeholder until full normalization is implemented
 	f.Normalized = f.AST
 
-	return f
+	return &Function{
+		Name:       f.Name,
+		File:       f.File,
+		StartLine:  f.StartLine,
+		EndLine:    f.EndLine,
+		AST:        f.Normalized,
+		Normalized: f.Normalized,
+		LineCount:  f.LineCount,
+	}
 }

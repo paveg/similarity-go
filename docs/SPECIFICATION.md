@@ -53,14 +53,14 @@ func NewIgnoreMatcher(ignoreFile, basePath string) (*IgnoreMatcher, error) {
     matcher := &IgnoreMatcher{
         basePath: basePath,
     }
-    
+
     if err := matcher.loadIgnoreFile(ignoreFile); err != nil {
         return nil, err
     }
-    
+
     // Add default patterns
     matcher.addDefaultPatterns()
-    
+
     return matcher, nil
 }
 
@@ -69,9 +69,9 @@ func (im *IgnoreMatcher) ShouldIgnore(path string) bool {
     if err != nil {
         return false
     }
-    
+
     ignored := false
-    
+
     for _, pattern := range im.patterns {
         if pattern.matches(relPath) {
             if pattern.negate {
@@ -81,7 +81,7 @@ func (im *IgnoreMatcher) ShouldIgnore(path string) bool {
             }
         }
     }
-    
+
     return ignored
 }
 
@@ -94,20 +94,20 @@ func (im *IgnoreMatcher) loadIgnoreFile(ignoreFile string) error {
         return err
     }
     defer file.Close()
-    
+
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
         line := strings.TrimSpace(scanner.Text())
-        
+
         // Skip empty lines and comments
         if line == "" || strings.HasPrefix(line, "#") {
             continue
         }
-        
+
         pattern := im.parsePattern(line)
         im.patterns = append(im.patterns, pattern)
     }
-    
+
     return scanner.Err()
 }
 
@@ -115,22 +115,22 @@ func (im *IgnoreMatcher) parsePattern(line string) ignorePattern {
     pattern := ignorePattern{
         pattern: line,
     }
-    
+
     // Handle negation
     if strings.HasPrefix(line, "!") {
         pattern.negate = true
         line = line[1:]
     }
-    
+
     // Handle directory-only patterns
     if strings.HasSuffix(line, "/") {
         pattern.dirOnly = true
         line = line[:len(line)-1]
     }
-    
+
     // Convert glob pattern to regex
     pattern.regex = im.globToRegex(line)
-    
+
     return pattern
 }
 
@@ -140,7 +140,7 @@ func (im *IgnoreMatcher) globToRegex(glob string) *regexp.Regexp {
     regex = strings.ReplaceAll(regex, "*", "[^/]*")
     regex = strings.ReplaceAll(regex, "**", ".*")
     regex = "^" + regex + "$"
-    
+
     return regexp.MustCompile(regex)
 }
 
@@ -391,15 +391,15 @@ func New(verbose bool, output io.Writer) *Logger {
     if verbose {
         level = slog.LevelDebug
     }
-    
+
     if output == nil {
         output = os.Stderr
     }
-    
+
     handler := slog.NewTextHandler(output, &slog.HandlerOptions{
         Level: level,
     })
-    
+
     return &Logger{
         Logger:  slog.New(handler),
         level:   level,
@@ -409,7 +409,7 @@ func New(verbose bool, output io.Writer) *Logger {
 
 func (l *Logger) Progress(message string, current, total int) {
     if l.verbose {
-        l.Info("progress", 
+        l.Info("progress",
             slog.String("message", message),
             slog.Int("current", current),
             slog.Int("total", total),
@@ -424,11 +424,11 @@ func (l *Logger) Performance(operation string, duration string, details map[stri
             slog.String("operation", operation),
             slog.String("duration", duration),
         }
-        
+
         for k, v := range details {
             attrs = append(attrs, slog.Any(k, v))
         }
-        
+
         l.LogAttrs(nil, slog.LevelDebug, "performance", attrs...)
     }
 }
@@ -470,7 +470,7 @@ func hello() {
         },
         // その他のテストケース...
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             // テスト実装
@@ -493,7 +493,7 @@ func TestSimilarityDetection(t *testing.T) {
             expected:  1,
         },
     }
-    
+
     for _, tc := range testCases {
         t.Run(tc.name, func(t *testing.T) {
             // 統合テスト実装
@@ -555,7 +555,7 @@ type Profiler struct {
 func New() *Profiler {
     var m runtime.MemStats
     runtime.ReadMemStats(&m)
-    
+
     return &Profiler{
         startTime: time.Now(),
         startMem:  m,
@@ -565,7 +565,7 @@ func New() *Profiler {
 func (p *Profiler) Report() ProfileReport {
     var m runtime.MemStats
     runtime.ReadMemStats(&m)
-    
+
     return ProfileReport{
         Duration:       time.Since(p.startTime),
         MemoryUsed:     m.Alloc - p.startMem.Alloc,

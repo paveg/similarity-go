@@ -30,5 +30,10 @@
   "yaml.schemas": {
     "https://json.schemastore.org/golangci-lint": ".golangci.yml"
   },
-  "yaml.validate": true
+  "yaml.validate": true,
+  "cSpell.words": [
+    "goast",
+    "gopkg",
+    "similarityignore"
+  ]
 }
