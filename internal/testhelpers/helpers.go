@@ -18,7 +18,7 @@ func CreateTempGoFile(t *testing.T, content string) string {
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test.go")
 
-	err := os.WriteFile(tempFile, []byte(content), 0o644)
+	err := os.WriteFile(tempFile, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

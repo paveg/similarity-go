@@ -24,6 +24,7 @@ coverage:
     - "cmd/main.go"        # Simple main function
     - "docs/**/*"
     - "*.md"
+    - "**/testhelpers/*.go"
 
 comment:
   layout: "reach,diff,flags,tree,reach"

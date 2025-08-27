@@ -1,7 +1,9 @@
-package types
+package types_test
 
 import (
 	"testing"
+
+	"github.com/paveg/similarity-go/pkg/types"
 )
 
 func TestOptional_Some(t *testing.T) {
@@ -16,7 +18,7 @@ func TestOptional_Some(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opt := Some(tt.value)
+			opt := types.Some(tt.value)
 
 			if !opt.IsSome() {
 				t.Errorf("Expected IsSome() to be true")
@@ -35,7 +37,7 @@ func TestOptional_Some(t *testing.T) {
 }
 
 func TestOptional_None(t *testing.T) {
-	opt := None[int]()
+	opt := types.None[int]()
 
 	if opt.IsSome() {
 		t.Errorf("Expected IsSome() to be false")
@@ -49,19 +51,19 @@ func TestOptional_None(t *testing.T) {
 func TestOptional_UnwrapOr(t *testing.T) {
 	tests := []struct {
 		name         string
-		optional     Optional[int]
+		optional     types.Optional[int]
 		defaultValue int
 		expected     int
 	}{
 		{
 			name:         "some value returns value",
-			optional:     Some(42),
+			optional:     types.Some(42),
 			defaultValue: 0,
 			expected:     42,
 		},
 		{
 			name:         "none returns default",
-			optional:     None[int](),
+			optional:     types.None[int](),
 			defaultValue: 100,
 			expected:     100,
 		},
@@ -82,24 +84,24 @@ func TestOptional_Map(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		optional Optional[int]
-		expected Optional[int]
+		optional types.Optional[int]
+		expected types.Optional[int]
 	}{
 		{
 			name:     "some value maps to some",
-			optional: Some(21),
-			expected: Some(42),
+			optional: types.Some(21),
+			expected: types.Some(42),
 		},
 		{
 			name:     "none remains none",
-			optional: None[int](),
-			expected: None[int](),
+			optional: types.None[int](),
+			expected: types.None[int](),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := MapOptional(tt.optional, doubleFunc)
+			got := types.MapOptional(tt.optional, doubleFunc)
 
 			if got.IsSome() != tt.expected.IsSome() {
 				t.Errorf("Expected IsSome() to be %v", tt.expected.IsSome())
@@ -119,29 +121,29 @@ func TestOptional_Filter(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		optional Optional[int]
-		expected Optional[int]
+		optional types.Optional[int]
+		expected types.Optional[int]
 	}{
 		{
 			name:     "some value passes filter",
-			optional: Some(42),
-			expected: Some(42),
+			optional: types.Some(42),
+			expected: types.Some(42),
 		},
 		{
 			name:     "some value fails filter",
-			optional: Some(21),
-			expected: None[int](),
+			optional: types.Some(21),
+			expected: types.None[int](),
 		},
 		{
 			name:     "none remains none",
-			optional: None[int](),
-			expected: None[int](),
+			optional: types.None[int](),
+			expected: types.None[int](),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Filter(tt.optional, evenFilter)
+			got := types.Filter(tt.optional, evenFilter)
 
 			if got.IsSome() != tt.expected.IsSome() {
 				t.Errorf("Expected IsSome() to be %v", tt.expected.IsSome())
@@ -157,39 +159,39 @@ func TestOptional_Filter(t *testing.T) {
 }
 
 func TestOptional_AndThen(t *testing.T) {
-	safeDiv := func(x int) Optional[int] {
+	safeDiv := func(x int) types.Optional[int] {
 		if x == 0 {
-			return None[int]()
+			return types.None[int]()
 		}
 
-		return Some(100 / x)
+		return types.Some(100 / x)
 	}
 
 	tests := []struct {
 		name     string
-		optional Optional[int]
-		expected Optional[int]
+		optional types.Optional[int]
+		expected types.Optional[int]
 	}{
 		{
 			name:     "some value with valid operation",
-			optional: Some(10),
-			expected: Some(10),
+			optional: types.Some(10),
+			expected: types.Some(10),
 		},
 		{
 			name:     "some value with invalid operation",
-			optional: Some(0),
-			expected: None[int](),
+			optional: types.Some(0),
+			expected: types.None[int](),
 		},
 		{
 			name:     "none remains none",
-			optional: None[int](),
-			expected: None[int](),
+			optional: types.None[int](),
+			expected: types.None[int](),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := AndThenOptional(tt.optional, safeDiv)
+			got := types.AndThenOptional(tt.optional, safeDiv)
 
 			if got.IsSome() != tt.expected.IsSome() {
 				t.Errorf("Expected IsSome() to be %v", tt.expected.IsSome())
@@ -211,6 +213,6 @@ func TestOptional_UnwrapPanic(t *testing.T) {
 		}
 	}()
 
-	opt := None[int]()
+	opt := types.None[int]()
 	opt.Unwrap() // Should panic
 }

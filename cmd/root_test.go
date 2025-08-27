@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestRootCommand(t *testing.T) {
@@ -44,8 +46,10 @@ func TestRootCommand(t *testing.T) {
 			// Capture output
 			var buf bytes.Buffer
 
-			cmd := newRootCommand()
-			cmd.SetOutput(&buf)
+			config := &Config{}
+			cmd := newRootCommand(config)
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
 			cmd.SetArgs(tt.args)
 
 			err := cmd.Execute()
@@ -106,7 +110,8 @@ func TestRootCommandFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := newRootCommand()
+			config := &Config{}
+			cmd := newRootCommand(config)
 			cmd.SetArgs(tt.args)
 
 			// Parse flags without executing
@@ -120,44 +125,50 @@ func TestRootCommandFlags(t *testing.T) {
 				t.Fatalf("Flag %s not found", tt.flagName)
 			}
 
-			switch expected := tt.expected.(type) {
-			case float64:
-				value, err := cmd.Flags().GetFloat64(tt.flagName)
-				if err != nil {
-					t.Fatalf("Failed to get float64 flag: %v", err)
-				}
-
-				if value != expected {
-					t.Errorf("Expected %v, got %v", expected, value)
-				}
-			case string:
-				value, err := cmd.Flags().GetString(tt.flagName)
-				if err != nil {
-					t.Fatalf("Failed to get string flag: %v", err)
-				}
-
-				if value != expected {
-					t.Errorf("Expected %v, got %v", expected, value)
-				}
-			case int:
-				value, err := cmd.Flags().GetInt(tt.flagName)
-				if err != nil {
-					t.Fatalf("Failed to get int flag: %v", err)
-				}
-
-				if value != expected {
-					t.Errorf("Expected %v, got %v", expected, value)
-				}
-			case bool:
-				value, err := cmd.Flags().GetBool(tt.flagName)
-				if err != nil {
-					t.Fatalf("Failed to get bool flag: %v", err)
-				}
-
-				if value != expected {
-					t.Errorf("Expected %v, got %v", expected, value)
-				}
-			}
+			validateFlagValue(t, cmd, tt.flagName, tt.expected)
 		})
+	}
+}
+
+func validateFlagValue(t *testing.T, cmd *cobra.Command, flagName string, expected interface{}) {
+	t.Helper()
+
+	switch expected := expected.(type) {
+	case float64:
+		floatValue, getErr := cmd.Flags().GetFloat64(flagName)
+		if getErr != nil {
+			t.Fatalf("Failed to get float64 flag: %v", getErr)
+		}
+
+		if floatValue != expected {
+			t.Errorf("Expected %v, got %v", expected, floatValue)
+		}
+	case string:
+		stringValue, getErr := cmd.Flags().GetString(flagName)
+		if getErr != nil {
+			t.Fatalf("Failed to get string flag: %v", getErr)
+		}
+
+		if stringValue != expected {
+			t.Errorf("Expected %v, got %v", expected, stringValue)
+		}
+	case int:
+		intValue, getErr := cmd.Flags().GetInt(flagName)
+		if getErr != nil {
+			t.Fatalf("Failed to get int flag: %v", getErr)
+		}
+
+		if intValue != expected {
+			t.Errorf("Expected %v, got %v", expected, intValue)
+		}
+	case bool:
+		boolValue, getErr := cmd.Flags().GetBool(flagName)
+		if getErr != nil {
+			t.Fatalf("Failed to get bool flag: %v", getErr)
+		}
+
+		if boolValue != expected {
+			t.Errorf("Expected %v, got %v", expected, boolValue)
+		}
 	}
 }
