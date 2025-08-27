@@ -92,12 +92,12 @@ func LevenshteinDistance(s1, s2 string) int {
 	cols := len(s2) + 1
 	matrix := make([][]int, rows)
 
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		matrix[i] = make([]int, cols)
 		matrix[i][0] = i
 	}
 
-	for j := 0; j < cols; j++ {
+	for j := range cols {
 		matrix[0][j] = j
 	}
 
@@ -110,9 +110,9 @@ func LevenshteinDistance(s1, s2 string) int {
 			}
 
 			matrix[i][j] = min(
-				matrix[i-1][j]+1,     // deletion
+				matrix[i-1][j]+1, // deletion
 				min(
-					matrix[i][j-1]+1, // insertion
+					matrix[i][j-1]+1,      // insertion
 					matrix[i-1][j-1]+cost, // substitution
 				),
 			)
@@ -287,7 +287,7 @@ func calculateChildrenDistance(node1, node2 goast.Node) int {
 	maxLen := max(len(children1), len(children2))
 	totalDistance := 0
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		var child1, child2 goast.Node
 		if i < len(children1) {
 			child1 = children1[i]
@@ -388,7 +388,7 @@ func getNodeChildren(node goast.Node) []goast.Node {
 	return children
 }
 
-// Helper functions
+// Helper functions.
 func min(a, b int) int {
 	if a < b {
 		return a

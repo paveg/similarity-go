@@ -230,7 +230,23 @@ func TestNormalizeTokenSequence(t *testing.T) {
 func add(a, b int) int {
 	return a + b
 }`,
-			expected: []string{"func", "IDENT", "(", "IDENT", ",", "IDENT", "int", ")", "int", "{", "return", "IDENT", "+", "IDENT", "}"},
+			expected: []string{
+				"func",
+				"IDENT",
+				"(",
+				"IDENT",
+				",",
+				"IDENT",
+				"int",
+				")",
+				"int",
+				"{",
+				"return",
+				"IDENT",
+				"+",
+				"IDENT",
+				"}",
+			},
 		},
 	}
 
@@ -261,7 +277,7 @@ func add(a, b int) int {
 	}
 }
 
-// Helper function to extract function name from source
+// Helper function to extract function name from source.
 func getFunctionName(source string) string {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, "", source, parser.ParseComments)
@@ -481,4 +497,3 @@ func test() {
 		})
 	}
 }
-
