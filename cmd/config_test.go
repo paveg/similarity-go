@@ -90,16 +90,16 @@ func TestConfigValidation(t *testing.T) {
 
 func TestRunSimilarityCheck(t *testing.T) {
 	// Test that the function runs without error with valid inputs
-	cmd := newRootCommand()
+	config := &Config{
+		threshold: 0.8,
+		format:    "json",
+		workers:   2,
+		verbose:   true,
+	}
+	cmd := newRootCommand(config)
 	cmd.SetArgs([]string{"./testdata"})
 
-	// Set some config values
-	config.threshold = 0.8
-	config.format = "json"
-	config.workers = 2
-	config.verbose = true
-
-	err := runSimilarityCheck(cmd, []string{"./testdata"})
+	err := runSimilarityCheck(config, cmd, []string{"./testdata"})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
