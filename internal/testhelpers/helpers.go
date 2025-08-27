@@ -66,11 +66,25 @@ func ExtractFunctionFromSource(t *testing.T, source, funcName string) *ast.FuncD
 }
 
 // CreateFunctionFromSource creates a Function instance from Go source code.
+// Returns nil if the function is not found instead of failing the test.
 func CreateFunctionFromSource(t *testing.T, source, funcName string) *astpkg.Function {
 	t.Helper()
 
-	fileSet, _ := ParseGoSource(t, source)
-	funcDecl := ExtractFunctionFromSource(t, source, funcName)
+	fileSet, file := ParseGoSource(t, source)
+
+	var funcDecl *ast.FuncDecl
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		if fd, ok := n.(*ast.FuncDecl); ok && fd.Name.Name == funcName {
+			funcDecl = fd
+			return false
+		}
+		return true
+	})
+
+	if funcDecl == nil {
+		return nil // Return nil instead of failing the test
+	}
 
 	return &astpkg.Function{
 		Name:      funcName,
@@ -148,4 +162,12 @@ func containsAt(s, substr string, start int) bool {
 	}
 
 	return containsAt(s, substr, start+1)
+}
+
+// AbsFloat returns the absolute value of a float64.
+func AbsFloat(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
