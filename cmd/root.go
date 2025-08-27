@@ -199,17 +199,19 @@ func groupSimilarMatches(matches []similarity.Match) [][]similarity.Match {
 	return groups
 }
 
-// countDuplications counts the total number of duplicate functions across all groups.
+// countDuplications counts the total number of unique duplicate functions across all groups.
 func countDuplications(groups [][]similarity.Match) int {
-	total := 0
+	uniqueFunctions := make(map[string]bool)
+
 	for _, group := range groups {
-		if len(group) > 0 {
-			// Each match represents 2 functions, so count the unique functions
-			const functionsPerMatch = 2
-			total += len(group) * functionsPerMatch
+		for _, match := range group {
+			// Use function hash to identify unique functions
+			uniqueFunctions[match.Function1.Hash()] = true
+			uniqueFunctions[match.Function2.Hash()] = true
 		}
 	}
-	return total
+
+	return len(uniqueFunctions)
 }
 
 // formatSimilarGroups formats similarity groups for output.

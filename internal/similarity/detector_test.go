@@ -328,14 +328,18 @@ func hello() string {
 				return
 			}
 
-			fn := testhelpers.CreateFunctionFromSource(t, tt.source, tt.name[len(tt.name)-4:]) // Extract function name
-			if fn == nil {
-				fn = testhelpers.CreateFunctionFromSource(t, tt.source, "add")
+			// Determine function name based on test case
+			var funcName string
+			switch tt.name {
+			case "function with binary expression":
+				funcName = "add"
+			case "function without binary expression":
+				funcName = "hello"
+			default:
+				funcName = "add" // fallback
 			}
 
-			if fn == nil {
-				fn = testhelpers.CreateFunctionFromSource(t, tt.source, "hello")
-			}
+			fn := testhelpers.CreateFunctionFromSource(t, tt.source, funcName)
 
 			if fn == nil {
 				t.Fatal("Failed to create function")

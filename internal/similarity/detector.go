@@ -277,6 +277,7 @@ func (d *Detector) getStructuralSignature(fn *ast.Function) string {
 	}
 
 	resultTypes := ""
+	resultCount := 0
 
 	if fn.AST.Type.Results != nil {
 		for _, result := range fn.AST.Type.Results.List {
@@ -286,6 +287,7 @@ func (d *Detector) getStructuralSignature(fn *ast.Function) string {
 				}
 
 				resultTypes += d.typeToString(result.Type)
+				resultCount++
 			}
 		}
 	}
@@ -303,7 +305,7 @@ func (d *Detector) getStructuralSignature(fn *ast.Function) string {
 	signature += ")"
 
 	if resultTypes != "" {
-		if len(paramTypes) > 1 || resultTypes != "" {
+		if resultCount > 1 {
 			signature += " (" + resultTypes + ")"
 		} else {
 			signature += " " + resultTypes
