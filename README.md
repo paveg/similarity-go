@@ -10,11 +10,12 @@ A Go code similarity detection CLI tool that uses AST analysis to find duplicate
 ## Features
 
 - **AST-based Analysis**: Uses Go's abstract syntax tree for accurate code similarity detection
+- **Directory Scanning**: Recursive traversal of directories with intelligent file filtering
 - **Configurable Thresholds**: Adjust similarity thresholds to match your needs
 - **Multiple Output Formats**: Support for JSON and YAML output formats
-- **Parallel Processing**: Concurrent analysis for better performance
-- **Ignore Patterns**: Support for .gitignore-style ignore patterns
-- **Comprehensive Testing**: 80%+ test coverage with TDD approach
+- **Ignore Patterns**: Built-in filtering for vendor/, hidden files, and build directories
+- **Mixed Target Support**: Analyze individual files and directories in single command
+- **Comprehensive Testing**: 67-100% test coverage with comprehensive test suite
 
 ## Installation
 
@@ -40,13 +41,19 @@ make build-windows # Windows (amd64, arm64)
 ## Usage
 
 ```bash
-# Basic usage
+# Basic usage - scan entire directory
 ./bin/similarity-go ./src
+
+# Analyze specific files
+./bin/similarity-go main.go utils.go
+
+# Multiple directories
+./bin/similarity-go ./cmd ./internal
 
 # With custom threshold and output format
 ./bin/similarity-go --threshold 0.8 --format yaml ./project
 
-# Verbose output
+# Verbose output with detailed file listing
 ./bin/similarity-go --verbose --output results.json ./code
 ```
 
@@ -90,15 +97,16 @@ make coverage-check          # Verify coverage threshold
 
 ## Architecture
 
-```
-├── cmd/           # CLI entry point
+```text
+├── cmd/           # CLI entry point with directory scanning
 ├── internal/      # Internal packages
 │   ├── ast/       # AST parsing and function extraction
-│   ├── similarity/# Similarity detection algorithms (planned)
-│   ├── scanner/   # File scanning with ignore patterns (planned)
+│   ├── similarity/# Multi-factor similarity detection algorithms
+│   ├── testhelpers/# Test utilities and helpers
 │   ├── cache/     # Caching system (planned)
 │   └── worker/    # Parallel processing (planned)
 ├── pkg/           # Public packages
+│   ├── mathutil/  # Generic math utilities (Min, Max, Abs)
 │   └── types/     # Utility types (Optional, Result)
 └── testdata/      # Test data and fixtures
 ```

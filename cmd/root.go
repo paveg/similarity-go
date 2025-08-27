@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -43,6 +44,16 @@ func newRootCommand(cfg *Config) *cobra.Command {
 		Use:   "similarity-go [flags] <targets...>",
 		Short: "Go code similarity detection tool",
 		Long: `A CLI tool that uses AST analysis to find duplicate and similar code patterns in Go projects.
+
+Targets can be:
+  - Individual Go files: file1.go file2.go
+  - Directories: ./internal ./cmd
+  - Mixed: ./internal file.go ./pkg
+
+Automatically scans directories recursively for .go files while ignoring:
+  - Hidden files and directories (starting with .)
+  - vendor/ directories
+  - Build directories (bin/, build/, dist/, target/, .git/)
 
 Detects similar code blocks that could be consolidated, helping with refactoring and maintaining code quality.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, gitCommit, buildTime),
@@ -85,7 +96,6 @@ func validateConfig(threshold float64, format string, workers, minLines int) err
 	return nil
 }
 
-//nolint:gocognit // Complex CLI integration logic acceptable
 func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 	// Validate configuration
 	if err := validateConfig(cfg.threshold, cfg.format, cfg.workers, cfg.minLines); err != nil {
@@ -115,25 +125,24 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Parsing target: %s\n", target)
 		}
 
-		// Check if target is a file or directory
-		if strings.HasSuffix(target, ".go") {
-			result := parser.ParseFile(target)
-			if result.IsErr() {
-				if cfg.verbose {
-					_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error parsing %s: %v\n", target, result.Error())
-				}
-				continue
-			}
-			parseResult := result.Unwrap()
+		// Process target (file or directory)
+		var functions []*ast.Function
+		var err error
 
-			// Filter functions by minimum lines
-			for _, fn := range parseResult.Functions {
-				if fn.LineCount >= cfg.minLines {
-					allFunctions = append(allFunctions, fn)
-				}
-			}
+		if strings.HasSuffix(target, ".go") {
+			functions, err = parseGoFile(parser, target, cfg)
+		} else {
+			functions, err = scanDirectory(parser, target, cfg)
 		}
-		// TODO: Handle directory scanning in Phase 4
+
+		if err != nil {
+			if cfg.verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error processing %s: %v\n", target, err)
+			}
+			continue
+		}
+
+		allFunctions = append(allFunctions, functions...)
 	}
 
 	if cfg.verbose {
@@ -254,4 +263,119 @@ func formatSimilarGroups(groups [][]similarity.Match) []map[string]interface{} {
 	}
 
 	return result
+}
+
+// parseGoFile parses a single Go file and returns functions that meet the minimum line criteria.
+func parseGoFile(parser *ast.Parser, filePath string, cfg *Config) ([]*ast.Function, error) {
+	result := parser.ParseFile(filePath)
+	if result.IsErr() {
+		return nil, result.Error()
+	}
+
+	parseResult := result.Unwrap()
+	var functions []*ast.Function
+
+	// Filter functions by minimum lines
+	for _, fn := range parseResult.Functions {
+		if fn.LineCount >= cfg.minLines {
+			functions = append(functions, fn)
+		}
+	}
+
+	return functions, nil
+}
+
+// scanDirectory recursively scans a directory for Go files and parses them.
+func scanDirectory(parser *ast.Parser, dirPath string, cfg *Config) ([]*ast.Function, error) {
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot access %s: %w", dirPath, err)
+	}
+
+	if !info.IsDir() {
+		return parseGoFile(parser, dirPath, cfg)
+	}
+
+	var allFunctions []*ast.Function
+	walkFunc := createWalkFunc(parser, cfg, &allFunctions)
+
+	err = filepath.Walk(dirPath, walkFunc)
+	if err != nil {
+		return nil, fmt.Errorf("error walking directory %s: %w", dirPath, err)
+	}
+
+	return allFunctions, nil
+}
+
+// createWalkFunc creates a filepath.WalkFunc for directory traversal.
+func createWalkFunc(parser *ast.Parser, cfg *Config, allFunctions *[]*ast.Function) filepath.WalkFunc {
+	return func(path string, _ os.FileInfo, err error) error {
+		if err != nil {
+			if cfg.verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error accessing %s: %v\n", path, err)
+			}
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		if shouldIgnoreFile(path, cfg) {
+			if cfg.verbose {
+				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Ignoring %s\n", path)
+			}
+			return nil
+		}
+
+		return processGoFile(parser, path, cfg, allFunctions)
+	}
+}
+
+// processGoFile parses a Go file and adds functions to the collection.
+func processGoFile(parser *ast.Parser, path string, cfg *Config, allFunctions *[]*ast.Function) error {
+	if cfg.verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Parsing file: %s\n", path)
+	}
+
+	functions, parseErr := parseGoFile(parser, path, cfg)
+	if parseErr != nil {
+		if cfg.verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error parsing %s: %v\n", path, parseErr)
+		}
+		return nil
+	}
+
+	*allFunctions = append(*allFunctions, functions...)
+	return nil
+}
+
+// shouldIgnoreFile determines if a file should be ignored based on configuration.
+func shouldIgnoreFile(filePath string, _ *Config) bool {
+	// Skip hidden files and directories
+	base := filepath.Base(filePath)
+	if strings.HasPrefix(base, ".") {
+		return true
+	}
+
+	// Skip vendor directories
+	if strings.Contains(filePath, "/vendor/") || strings.Contains(filePath, "\\vendor\\") {
+		return true
+	}
+
+	// Skip common build/output directories
+	ignoreDirs := []string{"/bin/", "/build/", "/dist/", "/target/", "/.git/"}
+	for _, ignoreDir := range ignoreDirs {
+		if strings.Contains(filePath, ignoreDir) ||
+			strings.Contains(filePath, strings.ReplaceAll(ignoreDir, "/", "\\")) {
+			return true
+		}
+	}
+
+	// Future: Add support for .similarityignore file patterns
+	// if cfg.ignoreFile != "" {
+	//     return matchesIgnorePatterns(filePath, cfg.ignoreFile)
+	// }
+
+	return false
 }
