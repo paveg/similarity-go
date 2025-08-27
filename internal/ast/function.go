@@ -87,7 +87,20 @@ func (f *Function) Hash() string {
 	}
 
 	if f.AST == nil {
-		f.hash = "nil_ast_hash"
+		// Include function name in hash even for nil AST
+		hashComponents := []string{
+			f.Name,
+			f.GetSignature(),
+			fmt.Sprintf("lines:%d-%d", f.StartLine, f.EndLine),
+			fmt.Sprintf("count:%d", f.LineCount),
+			"nil_ast",
+		}
+
+		combined := fmt.Sprintf("%v", hashComponents)
+		hasher := sha256.New()
+		hasher.Write([]byte(combined))
+		f.hash = hex.EncodeToString(hasher.Sum(nil))[:16]
+
 		return f.hash
 	}
 

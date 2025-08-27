@@ -17,11 +17,24 @@ const (
 	defaultSimilarOperationsThreshold = 0.5
 	differentSignatureWeight          = 0.3
 	statementCountDifferencePenalty   = 0.5
+
+	// Similarity algorithm weights.
+	treeEditWeight        = 0.3
+	tokenSimilarityWeight = 0.3
+	structuralWeight      = 0.25
+	signatureWeight       = 0.15
+
+	// Early termination thresholds.
+	maxSignatureLengthDifference = 50    // Max difference in signature length
+	maxLineDifferenceRatio       = 3.0   // Max ratio between function line counts
+	minSimilarityThreshold       = 0.1   // Below this, functions are too different
+	maxCacheSize                 = 10000 // Max number of cached similarity results
 )
 
 // Detector handles similarity detection between functions.
 type Detector struct {
-	threshold float64
+	threshold       float64
+	similarityCache map[string]float64 // Cache for similarity results
 }
 
 // Match represents a match between two similar functions.
@@ -34,7 +47,8 @@ type Match struct {
 // NewDetector creates a new similarity detector with the given threshold.
 func NewDetector(threshold float64) *Detector {
 	return &Detector{
-		threshold: threshold,
+		threshold:       threshold,
+		similarityCache: make(map[string]float64),
 	}
 }
 
@@ -43,6 +57,28 @@ func NewDetector(threshold float64) *Detector {
 func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 	if func1 == nil || func2 == nil {
 		return 0.0
+	}
+
+	// Early termination: check structural hashes first for quick identical/different detection
+	hash1 := func1.Hash()
+	hash2 := func2.Hash()
+	if hash1 == hash2 {
+		return 1.0 // Identical structural hash means identical functions
+	}
+
+	// Check cache for previously calculated similarity
+	cacheKey := d.getCacheKey(hash1, hash2)
+	if cached, exists := d.similarityCache[cacheKey]; exists {
+		return cached
+	}
+
+	// Early termination: quick signature-based filtering
+	if !d.couldBeSimilar(func1, func2) {
+		// Cache the result (with size limit)
+		if len(d.similarityCache) < maxCacheSize {
+			d.similarityCache[cacheKey] = 0.0
+		}
+		return 0.0 // Functions are too different to be similar
 	}
 
 	// If both functions have the same normalized AST structure, they are identical
@@ -65,7 +101,14 @@ func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 
 	// Weighted combination: prioritize tree edit and token similarity
 	// as they are more sophisticated algorithms
-	return 0.3*treeEditSim + 0.3*tokenSim + 0.25*structuralSim + 0.15*signatureSim
+	result := treeEditWeight*treeEditSim + tokenSimilarityWeight*tokenSim + structuralWeight*structuralSim + signatureWeight*signatureSim
+
+	// Cache the result for future use (with size limit)
+	if len(d.similarityCache) < maxCacheSize {
+		d.similarityCache[cacheKey] = result
+	}
+
+	return result
 }
 
 // IsAboveThreshold checks if similarity is above the configured threshold.
@@ -91,6 +134,56 @@ func (d *Detector) FindSimilarFunctions(functions []*ast.Function) []Match {
 	}
 
 	return matches
+}
+
+// couldBeSimilar performs quick heuristic checks to filter out obviously dissimilar functions.
+// This avoids expensive similarity calculations for functions that are clearly different.
+func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
+	// Check signature length difference
+	sig1 := func1.GetSignature()
+	sig2 := func2.GetSignature()
+
+	if abs(len(sig1)-len(sig2)) > maxSignatureLengthDifference {
+		return false
+	}
+
+	// Check line count ratio
+	lines1 := func1.LineCount
+	lines2 := func2.LineCount
+
+	if lines1 == 0 || lines2 == 0 {
+		return true // Can't determine, let full comparison decide
+	}
+
+	ratio := float64(lines1) / float64(lines2)
+	if ratio > maxLineDifferenceRatio || ratio < 1.0/maxLineDifferenceRatio {
+		return false
+	}
+
+	// Check basic structural compatibility
+	if func1.AST != nil && func2.AST != nil {
+		// Both have bodies, check statement count difference
+		if func1.AST.Body != nil && func2.AST.Body != nil {
+			stmt1Count := len(func1.AST.Body.List)
+			stmt2Count := len(func2.AST.Body.List)
+
+			// If one is empty and other has many statements, likely different
+			if (stmt1Count == 0 && stmt2Count > 5) || (stmt2Count == 0 && stmt1Count > 5) {
+				return false
+			}
+		}
+	}
+
+	return true // Passed quick checks, allow full comparison
+}
+
+// getCacheKey creates a consistent cache key for two function hashes.
+// Always puts the smaller hash first to ensure (A,B) and (B,A) have the same key.
+func (d *Detector) getCacheKey(hash1, hash2 string) string {
+	if hash1 < hash2 {
+		return hash1 + "|" + hash2
+	}
+	return hash2 + "|" + hash1
 }
 
 // compareNormalizedAST compares the normalized AST structures of two functions.

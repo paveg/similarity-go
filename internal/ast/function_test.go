@@ -334,35 +334,46 @@ func TestFunction_GetSource_EdgeCases(t *testing.T) {
 
 func TestFunction_Hash_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
-		function *astpkg.Function
-		expected string
+		name           string
+		function       *astpkg.Function
+		expectNonEmpty bool
+		expectUnique   bool
 	}{
 		{
-			name: "function with nil AST returns nil_ast_hash",
+			name: "function with nil AST returns non-empty hash",
 			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  nil,
 			},
-			expected: "nil_ast_hash",
+			expectNonEmpty: true,
+			expectUnique:   false,
 		},
 		{
-			name: "function with nil AST returns nil_ast_hash",
+			name: "different functions with nil AST have different hashes",
 			function: &astpkg.Function{
 				Name: "test2",
 				File: "test.go",
 				AST:  nil,
 			},
-			expected: "nil_ast_hash",
+			expectNonEmpty: true,
+			expectUnique:   true,
 		},
 	}
 
-	for _, tt := range tests {
+	var firstHash string
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.function.Hash()
-			if got != tt.expected {
-				t.Errorf("Expected hash %q, got %q", tt.expected, got)
+
+			if tt.expectNonEmpty && got == "" {
+				t.Errorf("Expected non-empty hash, got empty string")
+			}
+
+			if i == 0 {
+				firstHash = got
+			} else if tt.expectUnique && got == firstHash {
+				t.Errorf("Expected unique hash, got same as first function: %q", got)
 			}
 		})
 	}
