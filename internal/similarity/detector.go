@@ -10,6 +10,7 @@ import (
 	"go/token"
 
 	"github.com/paveg/similarity-go/internal/ast"
+	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
 const (
@@ -143,7 +144,7 @@ func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
 	sig1 := func1.GetSignature()
 	sig2 := func2.GetSignature()
 
-	if abs(len(sig1)-len(sig2)) > maxSignatureLengthDifference {
+	if mathutil.Abs(len(sig1)-len(sig2)) > maxSignatureLengthDifference {
 		return false
 	}
 
@@ -498,7 +499,7 @@ func (d *Detector) stringSimilarity(s1, s2 string) float64 {
 		maxLen = len(s2)
 	}
 
-	diff := abs(len(s1) - len(s2))
+	diff := mathutil.Abs(len(s1) - len(s2))
 
 	return 1.0 - float64(diff)/float64(maxLen)
 }
@@ -529,10 +530,4 @@ func (d *Detector) hasBinaryExpressions(body *goast.BlockStmt) bool {
 	return false
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-
-	return x
-}
+// abs function has been moved to pkg/mathutil package.
