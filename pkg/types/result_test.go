@@ -1,8 +1,10 @@
-package types
+package types_test
 
 import (
 	"errors"
 	"testing"
+
+	"github.com/paveg/similarity-go/pkg/types"
 )
 
 func TestResult_Ok(t *testing.T) {
@@ -17,7 +19,7 @@ func TestResult_Ok(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := Ok(tt.value)
+			result := types.Ok(tt.value)
 
 			if !result.IsOk() {
 				t.Errorf("Expected IsOk() to be true")
@@ -46,7 +48,7 @@ func TestResult_Err(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := Err[int](tt.err)
+			result := types.Err[int](tt.err)
 
 			if result.IsOk() {
 				t.Errorf("Expected IsOk() to be false")
@@ -66,19 +68,19 @@ func TestResult_Err(t *testing.T) {
 func TestResult_UnwrapOr(t *testing.T) {
 	tests := []struct {
 		name         string
-		result       Result[int]
+		result       types.Result[int]
 		defaultValue int
 		expected     int
 	}{
 		{
 			name:         "ok result returns value",
-			result:       Ok(42),
+			result:       types.Ok(42),
 			defaultValue: 0,
 			expected:     42,
 		},
 		{
 			name:         "err result returns default",
-			result:       Err[int](errors.New("error")),
+			result:       types.Err[int](errors.New("error")),
 			defaultValue: 100,
 			expected:     100,
 		},
@@ -99,24 +101,24 @@ func TestResult_Map(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		result   Result[int]
-		expected Result[int]
+		result   types.Result[int]
+		expected types.Result[int]
 	}{
 		{
 			name:     "ok result maps value",
-			result:   Ok(21),
-			expected: Ok(42),
+			result:   types.Ok(21),
+			expected: types.Ok(42),
 		},
 		{
 			name:     "err result remains err",
-			result:   Err[int](errors.New("error")),
-			expected: Err[int](errors.New("error")),
+			result:   types.Err[int](errors.New("error")),
+			expected: types.Err[int](errors.New("error")),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Map(tt.result, doubleFunc)
+			got := types.Map(tt.result, doubleFunc)
 
 			if got.IsOk() != tt.expected.IsOk() {
 				t.Errorf("Expected IsOk() to be %v", tt.expected.IsOk())
@@ -136,39 +138,39 @@ func TestResult_Map(t *testing.T) {
 }
 
 func TestResult_AndThen(t *testing.T) {
-	divideByTwo := func(x int) Result[int] {
+	divideByTwo := func(x int) types.Result[int] {
 		if x%2 != 0 {
-			return Err[int](errors.New("odd number"))
+			return types.Err[int](errors.New("odd number"))
 		}
 
-		return Ok(x / 2)
+		return types.Ok(x / 2)
 	}
 
 	tests := []struct {
 		name     string
-		result   Result[int]
-		expected Result[int]
+		result   types.Result[int]
+		expected types.Result[int]
 	}{
 		{
 			name:     "ok result with valid operation",
-			result:   Ok(42),
-			expected: Ok(21),
+			result:   types.Ok(42),
+			expected: types.Ok(21),
 		},
 		{
 			name:     "ok result with invalid operation",
-			result:   Ok(21),
-			expected: Err[int](errors.New("odd number")),
+			result:   types.Ok(21),
+			expected: types.Err[int](errors.New("odd number")),
 		},
 		{
 			name:     "err result remains err",
-			result:   Err[int](errors.New("original error")),
-			expected: Err[int](errors.New("original error")),
+			result:   types.Err[int](errors.New("original error")),
+			expected: types.Err[int](errors.New("original error")),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := AndThen(tt.result, divideByTwo)
+			got := types.AndThen(tt.result, divideByTwo)
 
 			if got.IsOk() != tt.expected.IsOk() {
 				t.Errorf("Expected IsOk() to be %v", tt.expected.IsOk())
@@ -190,6 +192,6 @@ func TestResult_UnwrapPanic(t *testing.T) {
 		}
 	}()
 
-	result := Err[int](errors.New("test error"))
+	result := types.Err[int](errors.New("test error"))
 	result.Unwrap() // Should panic
 }

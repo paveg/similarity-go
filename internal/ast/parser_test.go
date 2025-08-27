@@ -1,11 +1,13 @@
-package ast
+package ast_test
 
 import (
 	"os"
 	"testing"
+
+	"github.com/paveg/similarity-go/internal/ast"
 )
 
-func TestParser_ParseFile_ValidGoFiles(t *testing.T) {
+func TestParser_ParseFile_ValidGoFiles(t *testing.T) { //nolint:gocognit // test function complexity acceptable
 	tests := []struct {
 		name          string
 		source        string
@@ -133,7 +135,7 @@ var globalVar = "test"
 			tmpFile := createTempFile(t, tt.source)
 			defer os.Remove(tmpFile)
 
-			parser := NewParser()
+			parser := ast.NewParser()
 			result := parser.ParseFile(tmpFile)
 
 			if tt.expectError {
@@ -221,7 +223,7 @@ func TestParser_ParseFile_InvalidFiles(t *testing.T) {
 			tmpFile := createTempFile(t, tt.source)
 			defer os.Remove(tmpFile)
 
-			parser := NewParser()
+			parser := ast.NewParser()
 			result := parser.ParseFile(tmpFile)
 
 			if result.IsOk() {
@@ -248,7 +250,7 @@ func TestParser_ParseFile_FileSystemErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser()
+			parser := ast.NewParser()
 			result := parser.ParseFile(tt.filename)
 
 			if result.IsOk() {
@@ -262,7 +264,7 @@ func TestParser_ParseFiles_MultiplFiles(t *testing.T) {
 	// Create multiple temporary files
 	source1 := `package main
 func func1() { }`
-	source2 := `package main  
+	source2 := `package main
 func func2() { }
 func func3() { }`
 	source3 := `package main
@@ -279,7 +281,7 @@ var x = 1`
 		os.Remove(file3)
 	}()
 
-	parser := NewParser()
+	parser := ast.NewParser()
 	result := parser.ParseFiles([]string{file1, file2, file3})
 
 	if result.IsErr() {
@@ -327,7 +329,7 @@ func invalid syntax {`
 		os.Remove(invalidFile)
 	}()
 
-	parser := NewParser()
+	parser := ast.NewParser()
 	result := parser.ParseFiles([]string{validFile, invalidFile, nonExistentFile})
 
 	if result.IsErr() {
@@ -387,7 +389,7 @@ func withComments() {
 			tmpFile := createTempFile(t, tt.source)
 			defer os.Remove(tmpFile)
 
-			parser := NewParser()
+			parser := ast.NewParser()
 			result := parser.ParseFile(tmpFile)
 
 			if result.IsErr() {
@@ -408,15 +410,22 @@ func withComments() {
 }
 
 func TestParser_NewParser(t *testing.T) {
-	parser := NewParser()
+	parser := ast.NewParser()
 
 	if parser == nil {
-		t.Error("NewParser() should not return nil")
+		t.Error("ast.NewParser() should not return nil")
+		return
 	}
 
-	// Parser should be ready to use immediately
-	if parser.fileSet == nil {
-		t.Error("Parser should have initialized fileSet")
+	// Test that the parser is functional by attempting to parse a simple file
+	source := `package main
+func test() {}`
+	tmpFile := createTempFile(t, source)
+	defer os.Remove(tmpFile)
+
+	result := parser.ParseFile(tmpFile)
+	if result.IsErr() {
+		t.Errorf("Parser should be functional immediately after creation, got error: %v", result.Error())
 	}
 }
 
@@ -427,12 +436,12 @@ func createTempFile(t *testing.T, content string) string {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	if _, err := tmpFile.WriteString(content); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
+	if _, writeErr := tmpFile.WriteString(content); writeErr != nil {
+		t.Fatalf("Failed to write to temp file: %v", writeErr)
 	}
 
-	if err := tmpFile.Close(); err != nil {
-		t.Fatalf("Failed to close temp file: %v", err)
+	if closeErr := tmpFile.Close(); closeErr != nil {
+		t.Fatalf("Failed to close temp file: %v", closeErr)
 	}
 
 	return tmpFile.Name()

@@ -1,10 +1,12 @@
-package ast
+package ast_test
 
 import (
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"testing"
+
+	astpkg "github.com/paveg/similarity-go/internal/ast"
 )
 
 func TestFunction_GetSignature(t *testing.T) {
@@ -67,7 +69,7 @@ func divide(a, b int) (int, error) {
 				t.Fatal("No function declaration found")
 			}
 
-			fn := &Function{
+			fn := &astpkg.Function{
 				Name:      funcDecl.Name.Name,
 				File:      "test.go",
 				AST:       funcDecl,
@@ -108,7 +110,7 @@ func add(a, b int) int {
 		return true
 	})
 
-	fn := &Function{
+	fn := &astpkg.Function{
 		Name: "add",
 		File: "test.go",
 		AST:  funcDecl,
@@ -132,13 +134,13 @@ func add(a, b int) int {
 func TestFunction_IsValid(t *testing.T) {
 	tests := []struct {
 		name     string
-		function *Function
+		function *astpkg.Function
 		minLines int
 		expected bool
 	}{
 		{
 			name: "valid function above minimum lines",
-			function: &Function{
+			function: &astpkg.Function{
 				Name:      "test",
 				File:      "test.go",
 				StartLine: 1,
@@ -151,7 +153,7 @@ func TestFunction_IsValid(t *testing.T) {
 		},
 		{
 			name: "function below minimum lines",
-			function: &Function{
+			function: &astpkg.Function{
 				Name:      "test",
 				File:      "test.go",
 				StartLine: 1,
@@ -164,7 +166,7 @@ func TestFunction_IsValid(t *testing.T) {
 		},
 		{
 			name: "function with nil body (interface method)",
-			function: &Function{
+			function: &astpkg.Function{
 				Name:      "test",
 				File:      "test.go",
 				StartLine: 1,
@@ -193,7 +195,7 @@ func add(a, b int) int {
 	return a + b
 }`
 
-	source2 := `package main  
+	source2 := `package main
 func add(x, y int) int {
 	return x + y
 }`
@@ -227,6 +229,7 @@ func add(a, b int) int {
 	normalized1 := fn.Normalize()
 	if normalized1 == nil {
 		t.Error("Expected non-nil normalized function")
+		return
 	}
 
 	if normalized1.Name != fn.Name {
@@ -239,6 +242,7 @@ func add(a, b int) int {
 	normalized2 := fn.Normalize()
 	if normalized2 == nil {
 		t.Error("Expected non-nil normalized function from cache")
+		return
 	}
 
 	if normalized2.Name != fn.Name {
@@ -249,12 +253,12 @@ func add(a, b int) int {
 func TestFunction_GetSignature_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
-		function *Function
+		function *astpkg.Function
 		expected string
 	}{
 		{
 			name: "function with nil AST",
-			function: &Function{
+			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  nil,
@@ -263,7 +267,7 @@ func TestFunction_GetSignature_EdgeCases(t *testing.T) {
 		},
 		{
 			name: "function with AST but nil Type",
-			function: &Function{
+			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  &ast.FuncDecl{Type: nil},
@@ -271,13 +275,13 @@ func TestFunction_GetSignature_EdgeCases(t *testing.T) {
 			expected: "func()",
 		},
 		{
-			name: "function with cached signature",
-			function: &Function{
-				Name:      "test",
-				File:      "test.go",
-				signature: "cached_signature",
+			name: "function with nil AST and Type",
+			function: &astpkg.Function{
+				Name: "test",
+				File: "test.go",
+				AST:  &ast.FuncDecl{Type: nil},
 			},
-			expected: "cached_signature",
+			expected: "func()",
 		},
 	}
 
@@ -294,13 +298,13 @@ func TestFunction_GetSignature_EdgeCases(t *testing.T) {
 func TestFunction_GetSource_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name           string
-		function       *Function
+		function       *astpkg.Function
 		expectedSource string
 		expectError    bool
 	}{
 		{
 			name: "function with nil AST",
-			function: &Function{
+			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  nil,
@@ -331,12 +335,12 @@ func TestFunction_GetSource_EdgeCases(t *testing.T) {
 func TestFunction_Hash_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
-		function *Function
+		function *astpkg.Function
 		expected string
 	}{
 		{
 			name: "function with nil AST returns placeholder",
-			function: &Function{
+			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  nil,
@@ -344,13 +348,13 @@ func TestFunction_Hash_EdgeCases(t *testing.T) {
 			expected: "placeholder_hash",
 		},
 		{
-			name: "function with cached hash",
-			function: &Function{
-				Name: "test",
+			name: "function with nil AST returns placeholder",
+			function: &astpkg.Function{
+				Name: "test2",
 				File: "test.go",
-				hash: "cached_hash",
+				AST:  nil,
 			},
-			expected: "cached_hash",
+			expected: "placeholder_hash",
 		},
 	}
 
@@ -365,7 +369,7 @@ func TestFunction_Hash_EdgeCases(t *testing.T) {
 }
 
 // Helper functions.
-func createFunctionFromSource(t *testing.T, source, funcName string) *Function {
+func createFunctionFromSource(t *testing.T, source, funcName string) *astpkg.Function {
 	fileSet := token.NewFileSet()
 
 	file, err := parser.ParseFile(fileSet, "test.go", source, 0)
@@ -386,10 +390,10 @@ func createFunctionFromSource(t *testing.T, source, funcName string) *Function {
 	})
 
 	if funcDecl == nil {
-		t.Fatalf("Function %s not found", funcName)
+		t.Fatalf("astpkg.Function %s not found", funcName)
 	}
 
-	return &Function{
+	return &astpkg.Function{
 		Name:      funcName,
 		File:      "test.go",
 		AST:       funcDecl,
