@@ -30,19 +30,28 @@ This is a Go code similarity detection CLI tool that uses AST analysis to find d
 - `go vet ./...` - Run static analysis
 - `golangci-lint run` - Run comprehensive linting (if available)
 
+### Similarity Analysis
+
+- `./similarity-go --threshold 0.8 file1.go file2.go` - Analyze specific files
+- `./similarity-go --threshold 0.8 ./internal` - Scan entire directory recursively
+- `./similarity-go --threshold 0.8 ./cmd ./internal` - Scan multiple directories
+- `./similarity-go --threshold 0.8 --verbose ./internal` - Verbose output with file listing
+- `./similarity-go --format yaml --threshold 0.8 ./internal` - Output in YAML format
+
 ## Architecture
 
 The codebase follows a layered architecture:
 
 ```text
-├── cmd/           - CLI entry point (planned)
+├── cmd/           - CLI entry point with directory scanning
 ├── internal/      - Internal packages
 │   ├── ast/       - AST parsing and function extraction
-│   ├── scanner/   - File scanning with ignore patterns (planned)
-│   ├── similarity/- Similarity detection algorithms (planned)
+│   ├── similarity/- Multi-factor similarity detection algorithms  
+│   ├── testhelpers/- Test utilities and helpers
 │   ├── cache/     - Caching system (planned)
 │   └── worker/    - Parallel processing (planned)
 ├── pkg/
+│   ├── mathutil/  - Generic math utilities (Min, Max, Abs)
 │   └── types/     - Utility types (Optional, Result)
 └── docs/          - Comprehensive project documentation
 ```
@@ -61,6 +70,25 @@ The codebase follows a layered architecture:
 - **Result[T]**: Rust-like Result type for error handling
 - Fully implemented with comprehensive test coverage
 
+### Similarity Package (`internal/similarity/`)
+
+- **Detector**: Multi-factor similarity analysis using AST comparison, token sequence matching, and structural signatures
+- **Enhanced Algorithm**: Combines tree edit distance, token similarity, and signature matching with weighted scoring
+- **Performance Optimized**: Early termination and hash-based deduplication for O(n²) complexity management
+
+### CLI Interface (`cmd/`)
+
+- **Directory Scanning**: Recursive traversal of directories with intelligent Go file filtering
+- **Ignore Patterns**: Automatic exclusion of vendor/, hidden files, build directories, and test data
+- **Mixed Targets**: Support for analyzing individual files and entire directories in single command
+- **Flexible Output**: JSON and YAML formatting with verbose logging options
+
+### Math Utilities (`pkg/mathutil/`)
+
+- **Generic Functions**: Type-safe Min, Max, Abs functions using Go 1.21+ generics
+- **Consolidated Implementation**: Eliminates code duplication across the codebase
+- **Performance**: Zero-cost abstractions with compile-time type checking
+
 ## Current Implementation Status
 
 **Completed:**
@@ -70,12 +98,13 @@ The codebase follows a layered architecture:
 - Function representation with metadata (`internal/ast/function.go`)
 - Utility types for error handling (`pkg/types/`)
 - Test framework setup
+- CLI interface (cobra-based)
+- Similarity detection algorithms with enhanced multi-factor analysis
+- Directory scanning with file filtering and ignore patterns
+- Generic math utilities (`pkg/mathutil/`)
 
 **In Progress/Planned:**
 
-- CLI interface (cobra-based)
-- Similarity detection algorithms
-- File scanning with ignore patterns
 - Caching system
 - Parallel processing
 - Output formatting (JSON/YAML)

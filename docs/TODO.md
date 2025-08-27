@@ -6,17 +6,17 @@ Go ASTを利用してコードの類似性を検証するCLIツール。主に�
 
 ## 📊 プロジェクト進捗状況
 
-**全体進捗: Phase 3/7 完了 (約60%)**
+**全体進捗: Phase 4/7 完了 (約75%)**
 
-- ✅ **Phase 1-3: 基盤機能完了** - CLI、AST解析、類似性検出すべて実装済み
-- 🚧 **Phase 4: 次の実装対象** - ディレクトリスキャン・並列処理
-- 🔄 **Phase 5-7: 部分完了** - 出力機能、テスト、ドキュメント、CI/CD
+- ✅ **Phase 1-4: 基盤機能完了** - CLI、AST解析、類似性検出、ディレクトリスキャン実装済み
+- 🚧 **Phase 5: 次の実装対象** - キャッシュシステム・YAML出力
+- 🔄 **Phase 6-7: 部分完了** - 出力機能、テスト、ドキュメント、CI/CD
 
 **現在の機能状態:**
 
-- ✅ **動作可能**: 単一ファイル・複数ファイルの類似性検出
+- ✅ **動作可能**: 単一ファイル・複数ファイル・ディレクトリの類似性検出
 - ✅ **高品質**: テストカバレッジ67-100%、lint完全パス
-- ✅ **本番準備済み**: エラーハンドリング、ログ出力、構造化JSON出力
+- ✅ **本番準備済み**: エラーハンドリング、ログ出力、構造化JSON出力、ディレクトリ走査
 
 ## 要件
 
@@ -89,10 +89,10 @@ similarity-go/
 - [x] CLI統合・JSON出力機能
 - [x] エラーハンドリング・詳細ログ出力
 
-### Phase 4: スキャン・並列処理 🚧 **次の実装対象**
+### Phase 4: スキャン・並列処理 ✅ **完了**
 
-- [ ] ディレクトリ走査機能
-- [ ] ignore file 処理（.gitignoreライク）
+- [x] ディレクトリ走査機能
+- [x] ignore file 処理（.gitignoreライク）
 - [ ] 並列処理（goroutine pool）
 - [ ] プログレス表示
 
@@ -124,9 +124,11 @@ similarity-go/
 similarity-go [flags] <target>
 
 # 例
-similarity-go ./src
-similarity-go main.go utils.go
-similarity-go --threshold 0.8 --format json ./project
+similarity-go ./src                              # ディレクトリ全体をスキャン
+similarity-go main.go utils.go                   # 複数ファイル指定
+similarity-go --threshold 0.8 --format json ./project  # 設定付きスキャン
+similarity-go --verbose ./internal               # 詳細出力付きディレクトリスキャン
+similarity-go ./cmd ./internal                   # 複数ディレクトリ指定
 ```
 
 ### フラグ
