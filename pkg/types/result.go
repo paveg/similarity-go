@@ -1,5 +1,6 @@
-// Package types provides common type definitions and utilities for the similarity-go project.
-package types //nolint:revive // types is an appropriate name for utility type definitions
+// Package types provides generic type utilities including Optional and Result types
+// for enhanced type safety and functional programming patterns in Go.
+package types
 
 import "fmt"
 

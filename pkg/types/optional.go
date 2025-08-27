@@ -1,3 +1,5 @@
+// Package types provides generic type utilities including Optional and Result types
+// for enhanced type safety and functional programming patterns in Go.
 package types
 
 // Optional represents a value that may or may not be present.
