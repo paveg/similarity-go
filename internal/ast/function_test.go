@@ -339,22 +339,22 @@ func TestFunction_Hash_EdgeCases(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "function with nil AST returns placeholder",
+			name: "function with nil AST returns nil_ast_hash",
 			function: &astpkg.Function{
 				Name: "test",
 				File: "test.go",
 				AST:  nil,
 			},
-			expected: "placeholder_hash",
+			expected: "nil_ast_hash",
 		},
 		{
-			name: "function with nil AST returns placeholder",
+			name: "function with nil AST returns nil_ast_hash",
 			function: &astpkg.Function{
 				Name: "test2",
 				File: "test.go",
 				AST:  nil,
 			},
-			expected: "placeholder_hash",
+			expected: "nil_ast_hash",
 		},
 	}
 

@@ -13,6 +13,7 @@ Go ASTを利用してコードの類似性を検証するCLIツール。主に�
 - 🔄 **Phase 5-7: 部分完了** - 出力機能、テスト、ドキュメント、CI/CD
 
 **現在の機能状態:**
+
 - ✅ **動作可能**: 単一ファイル・複数ファイルの類似性検出
 - ✅ **高品質**: テストカバレッジ67-100%、lint完全パス
 - ✅ **本番準備済み**: エラーハンドリング、ログ出力、構造化JSON出力
@@ -163,7 +164,7 @@ similarity-go --threshold 0.8 --format json ./project
           "hash": "abc123..."
         },
         {
-          "file": "src/admin.go", 
+          "file": "src/admin.go",
           "function": "HandleAdmin",
           "start_line": 45,
           "end_line": 60,

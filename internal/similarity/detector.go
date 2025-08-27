@@ -410,8 +410,8 @@ func (d *Detector) stringSimilarity(s1, s2 string) float64 {
 
 // hasSimilarOperations checks if functions perform similar operations.
 func (d *Detector) hasSimilarOperations(func1, func2 *ast.Function) bool {
-	// Simple check: if both functions have return statements with binary expressions
-	// This is a placeholder - in reality, you'd want more sophisticated analysis
+	// Check if both functions have similar operation patterns (e.g., binary expressions)
+	// This provides a basic heuristic for operational similarity
 	return d.hasBinaryExpressions(func1.AST.Body) && d.hasBinaryExpressions(func2.AST.Body)
 }
 

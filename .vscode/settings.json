@@ -32,6 +32,8 @@
   },
   "yaml.validate": true,
   "cSpell.words": [
-    "goast"
+    "goast",
+    "gopkg",
+    "similarityignore"
   ]
 }
