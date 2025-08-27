@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -351,7 +352,7 @@ func processGoFile(parser *ast.Parser, path string, cfg *Config, allFunctions *[
 }
 
 // shouldIgnoreFile determines if a file should be ignored based on configuration.
-func shouldIgnoreFile(filePath string, _ *Config) bool {
+func shouldIgnoreFile(filePath string, cfg *Config) bool {
 	// Skip hidden files and directories
 	base := filepath.Base(filePath)
 	if strings.HasPrefix(base, ".") {
@@ -372,10 +373,65 @@ func shouldIgnoreFile(filePath string, _ *Config) bool {
 		}
 	}
 
-	// Future: Add support for .similarityignore file patterns
-	// if cfg.ignoreFile != "" {
-	//     return matchesIgnorePatterns(filePath, cfg.ignoreFile)
-	// }
+	// Check .similarityignore file patterns
+	if cfg.ignoreFile != "" {
+		return matchesIgnorePatterns(filePath, cfg.ignoreFile)
+	}
+
+	return false
+}
+
+// matchesIgnorePatterns checks if a file path matches any patterns in the ignore file.
+func matchesIgnorePatterns(filePath, ignoreFilePath string) bool {
+	ignoreFile, err := os.Open(ignoreFilePath)
+	if err != nil {
+		// If ignore file doesn't exist or can't be read, don't ignore anything
+		return false
+	}
+	defer ignoreFile.Close()
+
+	scanner := bufio.NewScanner(ignoreFile)
+	for scanner.Scan() {
+		pattern := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if pattern == "" || strings.HasPrefix(pattern, "#") {
+			continue
+		}
+
+		// Check if pattern matches the file path
+		if matchesPattern(filePath, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesPattern checks if a file path matches a glob-like pattern.
+func matchesPattern(filePath, pattern string) bool {
+	// Normalize path separators
+	filePath = filepath.ToSlash(filePath)
+	pattern = filepath.ToSlash(pattern)
+
+	// Handle simple wildcards and exact matches
+	matched, err := filepath.Match(pattern, filepath.Base(filePath))
+	if err == nil && matched {
+		return true
+	}
+
+	// Check if pattern matches anywhere in the path
+	if strings.Contains(filePath, pattern) {
+		return true
+	}
+
+	// Handle directory patterns (ending with /)
+	if strings.HasSuffix(pattern, "/") {
+		dirPattern := strings.TrimSuffix(pattern, "/")
+		if strings.Contains(filePath, "/"+dirPattern+"/") || strings.HasPrefix(filePath, dirPattern+"/") {
+			return true
+		}
+	}
 
 	return false
 }
