@@ -85,6 +85,7 @@ func validateConfig(threshold float64, format string, workers, minLines int) err
 	return nil
 }
 
+//nolint:gocognit // Complex CLI integration logic acceptable
 func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 	// Validate configuration
 	if err := validateConfig(cfg.threshold, cfg.format, cfg.workers, cfg.minLines); err != nil {
@@ -183,23 +184,23 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 }
 
 // groupSimilarMatches groups similar matches by functions that appear together.
-func groupSimilarMatches(matches []similarity.SimilarityMatch) [][]similarity.SimilarityMatch {
+func groupSimilarMatches(matches []similarity.Match) [][]similarity.Match {
 	if len(matches) == 0 {
 		return nil
 	}
 
 	// Simple grouping: each match becomes its own group for now
 	// TODO: Implement more sophisticated grouping in Phase 4
-	var groups [][]similarity.SimilarityMatch
+	var groups [][]similarity.Match
 	for _, match := range matches {
-		groups = append(groups, []similarity.SimilarityMatch{match})
+		groups = append(groups, []similarity.Match{match})
 	}
 
 	return groups
 }
 
 // countDuplications counts the total number of duplicate functions across all groups.
-func countDuplications(groups [][]similarity.SimilarityMatch) int {
+func countDuplications(groups [][]similarity.Match) int {
 	total := 0
 	for _, group := range groups {
 		if len(group) > 0 {
@@ -212,7 +213,7 @@ func countDuplications(groups [][]similarity.SimilarityMatch) int {
 }
 
 // formatSimilarGroups formats similarity groups for output.
-func formatSimilarGroups(groups [][]similarity.SimilarityMatch) []map[string]interface{} {
+func formatSimilarGroups(groups [][]similarity.Match) []map[string]interface{} {
 	var result []map[string]interface{}
 
 	for i, group := range groups {

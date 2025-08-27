@@ -231,6 +231,8 @@ func isBasicType(ident string) bool {
 }
 
 // nodesStructurallyEqual checks if two AST nodes are structurally equal.
+//
+//nolint:gocognit // Complex AST comparison algorithm acceptable
 func nodesStructurallyEqual(node1, node2 goast.Node) bool {
 	if node1 == nil && node2 == nil {
 		return true
@@ -345,6 +347,8 @@ func getNodeType(node goast.Node) string {
 }
 
 // getNodeChildren returns the child nodes of a given AST node.
+//
+//nolint:gocognit // Complex AST traversal algorithm acceptable
 func getNodeChildren(node goast.Node) []goast.Node {
 	var children []goast.Node
 

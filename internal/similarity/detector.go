@@ -24,8 +24,8 @@ type Detector struct {
 	threshold float64
 }
 
-// SimilarityMatch represents a match between two similar functions.
-type SimilarityMatch struct {
+// Match represents a match between two similar functions.
+type Match struct {
 	Function1  *ast.Function
 	Function2  *ast.Function
 	Similarity float64
@@ -74,14 +74,14 @@ func (d *Detector) IsAboveThreshold(similarity float64) bool {
 }
 
 // FindSimilarFunctions finds all similar function pairs above the threshold.
-func (d *Detector) FindSimilarFunctions(functions []*ast.Function) []SimilarityMatch {
-	var matches []SimilarityMatch
+func (d *Detector) FindSimilarFunctions(functions []*ast.Function) []Match {
+	var matches []Match
 
 	for i := range functions {
 		for j := i + 1; j < len(functions); j++ {
 			similarity := d.CalculateSimilarity(functions[i], functions[j])
 			if d.IsAboveThreshold(similarity) {
-				matches = append(matches, SimilarityMatch{
+				matches = append(matches, Match{
 					Function1:  functions[i],
 					Function2:  functions[j],
 					Similarity: similarity,
@@ -147,6 +147,8 @@ func (d *Detector) calculateTreeEditSimilarity(func1, func2 *ast.Function) float
 }
 
 // countASTNodes counts the number of nodes in an AST.
+//
+//nolint:gocognit // Complex AST node counting algorithm acceptable
 func (d *Detector) countASTNodes(node goast.Node) int {
 	if node == nil {
 		return 0
@@ -256,6 +258,8 @@ func (d *Detector) calculateSignatureSimilarity(func1, func2 *ast.Function) floa
 }
 
 // getStructuralSignature gets signature without parameter names.
+//
+//nolint:gocognit // Complex structural signature generation algorithm acceptable
 func (d *Detector) getStructuralSignature(fn *ast.Function) string {
 	if fn.AST == nil || fn.AST.Type == nil {
 		return ""
