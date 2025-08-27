@@ -15,10 +15,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	// DefaultTolerance is the default tolerance for similarity tests.
-	DefaultTolerance = 0.1
-)
+// TestConfig contains configuration for test helpers.
+type TestConfig struct {
+	DefaultTolerance  float64
+	DefaultFuncName   string
+}
+
+// DefaultTestConfig returns the default test configuration.
+func DefaultTestConfig() *TestConfig {
+	return &TestConfig{
+		DefaultTolerance: 0.1,
+		DefaultFuncName:  "testFunc",
+	}
+}
 
 // CreateTempGoFile creates a temporary Go file with the given content for testing.
 func CreateTempGoFile(t *testing.T, content string) string {
@@ -357,6 +366,12 @@ func executeSimilarityTestCase(t *testing.T, tt SimilarityTestCase, detector int
 
 // getFunctionName returns the function name or extracts it from source.
 func getFunctionName(providedName, source string) string {
+	cfg := DefaultTestConfig()
+	return getFunctionNameWithConfig(providedName, source, cfg)
+}
+
+// getFunctionNameWithConfig returns the function name using provided configuration.
+func getFunctionNameWithConfig(providedName, source string, cfg *TestConfig) string {
 	if providedName != "" {
 		return providedName
 	}
@@ -366,13 +381,19 @@ func getFunctionName(providedName, source string) string {
 		return extractedName
 	}
 
-	return "testFunc"
+	return cfg.DefaultFuncName
 }
 
 // getToleranceOrDefault returns the tolerance value or default if zero.
 func getToleranceOrDefault(tolerance float64) float64 {
+	cfg := DefaultTestConfig()
+	return getToleranceOrDefaultWithConfig(tolerance, cfg)
+}
+
+// getToleranceOrDefaultWithConfig returns the tolerance value using provided configuration.
+func getToleranceOrDefaultWithConfig(tolerance float64, cfg *TestConfig) float64 {
 	if tolerance == 0 {
-		return DefaultTolerance
+		return cfg.DefaultTolerance
 	}
 	return tolerance
 }

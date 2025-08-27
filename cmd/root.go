@@ -3,24 +3,19 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/paveg/similarity-go/internal/ast"
+	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/similarity"
 )
 
-const (
-	// Default configuration values.
-	defaultThreshold = 0.7
-	defaultMinLines  = 5
-)
 
 var (
 	version   = "dev"     // Will be set during build //nolint:gochecknoglobals // build-time variables
@@ -28,19 +23,14 @@ var (
 	buildTime = "unknown" //nolint:gochecknoglobals // build-time variables
 )
 
-// Config represents the application configuration.
-type Config struct {
-	threshold  float64
-	format     string
-	workers    int
-	useCache   bool
-	ignoreFile string
+// CLIArgs represents the CLI-specific arguments that extend configuration.
+type CLIArgs struct {
+	configFile string
 	output     string
 	verbose    bool
-	minLines   int
 }
 
-func newRootCommand(cfg *Config) *cobra.Command {
+func newRootCommand(args *CLIArgs) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "similarity-go [flags] <targets...>",
 		Short: "Go code similarity detection tool",
@@ -59,70 +49,83 @@ Automatically scans directories recursively for .go files while ignoring:
 Detects similar code blocks that could be consolidated, helping with refactoring and maintaining code quality.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, gitCommit, buildTime),
 		Args:    cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSimilarityCheck(cfg, cmd, args)
+		RunE: func(cmd *cobra.Command, targets []string) error {
+			return runSimilarityCheck(args, cmd, targets)
 		},
 	}
 
-	// Add flags
-	rootCmd.Flags().Float64VarP(&cfg.threshold, "threshold", "t", defaultThreshold, "similarity threshold (0.0-1.0)")
-	rootCmd.Flags().StringVarP(&cfg.format, "format", "f", "json", "output format (json|yaml)")
-	rootCmd.Flags().IntVarP(&cfg.workers, "workers", "w", runtime.NumCPU(), "number of parallel workers")
-	rootCmd.Flags().BoolVar(&cfg.useCache, "cache", true, "enable caching")
-	rootCmd.Flags().StringVar(&cfg.ignoreFile, "ignore", ".similarityignore", "ignore file path")
-	rootCmd.Flags().StringVarP(&cfg.output, "output", "o", "", "output file (default: stdout)")
-	rootCmd.Flags().BoolVarP(&cfg.verbose, "verbose", "v", false, "verbose output")
-	rootCmd.Flags().IntVar(&cfg.minLines, "min-lines", defaultMinLines, "minimum function lines to analyze")
+	// Add flags - configuration will be loaded inside runSimilarityCheck
+	rootCmd.Flags().StringVarP(&args.configFile, "config", "c", "", "config file path")
+	rootCmd.Flags().StringVarP(&args.output, "output", "o", "", "output file (default: stdout)")
+	rootCmd.Flags().BoolVarP(&args.verbose, "verbose", "v", false, "verbose output")
+	
+	// Allow overriding config values via flags - will be parsed in runSimilarityCheck
+	rootCmd.Flags().Float64P("threshold", "t", 0, "similarity threshold (0.0-1.0)")
+	rootCmd.Flags().StringP("format", "f", "", "output format (json|yaml)")
+	rootCmd.Flags().IntP("workers", "w", 0, "number of parallel workers")
+	rootCmd.Flags().Bool("cache", false, "enable caching")
+	rootCmd.Flags().String("ignore", "", "ignore file path")
+	rootCmd.Flags().Int("min-lines", 0, "minimum function lines to analyze")
 
 	return rootCmd
 }
 
-func validateConfig(threshold float64, format string, workers, minLines int) error {
-	if threshold < 0.0 || threshold > 1.0 {
-		return errors.New("threshold must be between 0.0 and 1.0")
+func applyFlagOverrides(cfg *config.Config, cmd *cobra.Command) error {
+	// Apply flag overrides to configuration
+	if threshold, _ := cmd.Flags().GetFloat64("threshold"); threshold > 0 {
+		cfg.CLI.DefaultThreshold = threshold
+	}
+	if format, _ := cmd.Flags().GetString("format"); format != "" {
+		cfg.CLI.DefaultFormat = format
+	}
+	if workers, _ := cmd.Flags().GetInt("workers"); workers > 0 {
+		cfg.CLI.DefaultWorkers = workers
+	}
+	if cache, _ := cmd.Flags().GetBool("cache"); cmd.Flags().Changed("cache") {
+		cfg.CLI.DefaultCache = cache
+	}
+	if ignore, _ := cmd.Flags().GetString("ignore"); ignore != "" {
+		cfg.Ignore.DefaultFile = ignore
+	}
+	if minLines, _ := cmd.Flags().GetInt("min-lines"); minLines > 0 {
+		cfg.CLI.DefaultMinLines = minLines
 	}
 
-	if format != "json" && format != "yaml" {
-		return errors.New("format must be json or yaml")
-	}
-
-	if workers <= 0 {
-		return errors.New("workers must be greater than 0")
-	}
-
-	if minLines <= 0 {
-		return errors.New("min-lines must be greater than 0")
-	}
-
-	return nil
+	return cfg.Validate()
 }
 
-func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
-	// Validate configuration
-	if err := validateConfig(cfg.threshold, cfg.format, cfg.workers, cfg.minLines); err != nil {
-		return err
+func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) error {
+	// Load configuration
+	cfg, err := config.Load(args.configFile)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	if cfg.verbose {
-		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Running similarity analysis on targets: %v\n", args)
+	// Apply flag overrides
+	if err := applyFlagOverrides(cfg, cmd); err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	if args.verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Running similarity analysis on targets: %v\n", targets)
 		_, _ = fmt.Fprintf(
 			os.Stderr,
 			"[similarity-go] Configuration - Threshold: %.2f, Format: %s, Workers: %d, Cache: %v\n",
-			cfg.threshold,
-			cfg.format,
-			cfg.workers,
-			cfg.useCache,
+			cfg.CLI.DefaultThreshold,
+			cfg.CLI.DefaultFormat,
+			cfg.CLI.DefaultWorkers,
+			cfg.CLI.DefaultCache,
 		)
 	}
 
 	// Initialize parser and detector
 	parser := ast.NewParser()
-	detector := similarity.NewDetector(cfg.threshold)
+	detector := similarity.NewDetectorWithConfig(cfg.CLI.DefaultThreshold, cfg)
 
 	// Parse all target files
 	var allFunctions []*ast.Function
-	for _, target := range args {
-		if cfg.verbose {
+	for _, target := range targets {
+		if args.verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Parsing target: %s\n", target)
 		}
 
@@ -131,13 +134,13 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 		var err error
 
 		if strings.HasSuffix(target, ".go") {
-			functions, err = parseGoFile(parser, target, cfg)
+			functions, err = parseGoFile(parser, target, cfg, args.verbose)
 		} else {
-			functions, err = scanDirectory(parser, target, cfg)
+			functions, err = scanDirectory(parser, target, cfg, args.verbose)
 		}
 
 		if err != nil {
-			if cfg.verbose {
+			if args.verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error processing %s: %v\n", target, err)
 			}
 			continue
@@ -146,7 +149,7 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 		allFunctions = append(allFunctions, functions...)
 	}
 
-	if cfg.verbose {
+	if args.verbose {
 		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Found %d functions for analysis\n", len(allFunctions))
 	}
 
@@ -163,13 +166,13 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 			"similar_groups":     len(similarGroups),
 			"total_duplications": countDuplications(similarGroups),
 		},
-		"similar_groups": formatSimilarGroups(similarGroups),
+		"similar_groups": formatSimilarGroups(similarGroups, cfg),
 	}
 
 	// Output results
 	outputWriter := os.Stdout
-	if cfg.output != "" {
-		file, err := os.Create(cfg.output)
+	if args.output != "" {
+		file, err := os.Create(args.output)
 		if err != nil {
 			return fmt.Errorf("failed to create output file: %w", err)
 		}
@@ -178,7 +181,7 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 	}
 
 	// Format output
-	switch cfg.format {
+	switch cfg.CLI.DefaultFormat {
 	case "json":
 		encoder := json.NewEncoder(outputWriter)
 		encoder.SetIndent("", "  ")
@@ -186,27 +189,133 @@ func runSimilarityCheck(cfg *Config, _ *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to encode JSON output: %w", err)
 		}
 	case "yaml":
-		// TODO: Implement YAML output in Phase 5
-		return errors.New("YAML output format not yet implemented")
+		encoder := yaml.NewEncoder(outputWriter)
+		defer encoder.Close()
+		if err := encoder.Encode(output); err != nil {
+			return fmt.Errorf("failed to encode YAML output: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported output format: %s", cfg.CLI.DefaultFormat)
 	}
 
 	return nil
 }
 
 // groupSimilarMatches groups similar matches by functions that appear together.
+// Uses transitive clustering to group functions that are similar to each other.
 func groupSimilarMatches(matches []similarity.Match) [][]similarity.Match {
 	if len(matches) == 0 {
 		return nil
 	}
 
-	// Simple grouping: each match becomes its own group for now
-	// TODO: Implement more sophisticated grouping in Phase 4
-	var groups [][]similarity.Match
+	// Create a graph of function similarities
+	functionGraph := make(map[string]map[string]similarity.Match)
+	allFunctions := make(map[string]*ast.Function)
+
+	// Build the graph
 	for _, match := range matches {
-		groups = append(groups, []similarity.Match{match})
+		hash1 := match.Function1.Hash()
+		hash2 := match.Function2.Hash()
+
+		// Store functions by hash
+		allFunctions[hash1] = match.Function1
+		allFunctions[hash2] = match.Function2
+
+		// Add edges in both directions
+		if functionGraph[hash1] == nil {
+			functionGraph[hash1] = make(map[string]similarity.Match)
+		}
+		if functionGraph[hash2] == nil {
+			functionGraph[hash2] = make(map[string]similarity.Match)
+		}
+
+		functionGraph[hash1][hash2] = match
+		functionGraph[hash2][hash1] = similarity.Match{
+			Function1:  match.Function2,
+			Function2:  match.Function1,
+			Similarity: match.Similarity,
+		}
+	}
+
+	// Use Union-Find (Disjoint Set) to group connected components
+	groups := findConnectedGroups(functionGraph, allFunctions)
+
+	// Convert to the required format
+	var result [][]similarity.Match
+	for _, group := range groups {
+		if len(group) < 2 {
+			continue // Skip single function groups
+		}
+
+		var groupMatches []similarity.Match
+		added := make(map[string]bool)
+
+		// Generate all pairwise matches within the group
+		for i, func1 := range group {
+			for j := i + 1; j < len(group); j++ {
+				func2 := group[j]
+				hash1 := func1.Hash()
+				hash2 := func2.Hash()
+
+				// Avoid duplicate matches
+				key := hash1 + "|" + hash2
+				if hash1 > hash2 {
+					key = hash2 + "|" + hash1
+				}
+
+				if !added[key] {
+					if match, exists := functionGraph[hash1][hash2]; exists {
+						groupMatches = append(groupMatches, match)
+						added[key] = true
+					}
+				}
+			}
+		}
+
+		if len(groupMatches) > 0 {
+			result = append(result, groupMatches)
+		}
+	}
+
+	return result
+}
+
+// findConnectedGroups uses DFS to find connected components in the similarity graph.
+func findConnectedGroups(graph map[string]map[string]similarity.Match, allFunctions map[string]*ast.Function) [][]*ast.Function {
+	visited := make(map[string]bool)
+	var groups [][]*ast.Function
+
+	// Perform DFS from each unvisited node
+	for functionHash := range allFunctions {
+		if !visited[functionHash] {
+			var group []*ast.Function
+			dfsVisit(graph, allFunctions, functionHash, visited, &group)
+			if len(group) > 1 { // Only include groups with multiple functions
+				groups = append(groups, group)
+			}
+		}
 	}
 
 	return groups
+}
+
+// dfsVisit performs depth-first search to collect all connected functions.
+func dfsVisit(graph map[string]map[string]similarity.Match, allFunctions map[string]*ast.Function, 
+	currentHash string, visited map[string]bool, group *[]*ast.Function) {
+	
+	visited[currentHash] = true
+	if function, exists := allFunctions[currentHash]; exists {
+		*group = append(*group, function)
+	}
+
+	// Visit all connected functions
+	if neighbors, exists := graph[currentHash]; exists {
+		for neighborHash := range neighbors {
+			if !visited[neighborHash] {
+				dfsVisit(graph, allFunctions, neighborHash, visited, group)
+			}
+		}
+	}
 }
 
 // countDuplications counts the total number of unique duplicate functions across all groups.
@@ -225,7 +334,7 @@ func countDuplications(groups [][]similarity.Match) int {
 }
 
 // formatSimilarGroups formats similarity groups for output.
-func formatSimilarGroups(groups [][]similarity.Match) []map[string]interface{} {
+func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[string]interface{} {
 	var result []map[string]interface{}
 
 	for i, group := range groups {
@@ -257,7 +366,7 @@ func formatSimilarGroups(groups [][]similarity.Match) []map[string]interface{} {
 			"id":                  fmt.Sprintf("group_%d", i+1),
 			"similarity_score":    match.Similarity,
 			"functions":           functions,
-			"refactor_suggestion": "Consider extracting common logic into a shared function",
+			"refactor_suggestion": cfg.Output.RefactorSuggestion,
 		}
 
 		result = append(result, groupData)
@@ -267,7 +376,7 @@ func formatSimilarGroups(groups [][]similarity.Match) []map[string]interface{} {
 }
 
 // parseGoFile parses a single Go file and returns functions that meet the minimum line criteria.
-func parseGoFile(parser *ast.Parser, filePath string, cfg *Config) ([]*ast.Function, error) {
+func parseGoFile(parser *ast.Parser, filePath string, cfg *config.Config, verbose bool) ([]*ast.Function, error) {
 	result := parser.ParseFile(filePath)
 	if result.IsErr() {
 		return nil, result.Error()
@@ -278,7 +387,7 @@ func parseGoFile(parser *ast.Parser, filePath string, cfg *Config) ([]*ast.Funct
 
 	// Filter functions by minimum lines
 	for _, fn := range parseResult.Functions {
-		if fn.LineCount >= cfg.minLines {
+		if fn.LineCount >= cfg.CLI.DefaultMinLines {
 			functions = append(functions, fn)
 		}
 	}
@@ -287,18 +396,18 @@ func parseGoFile(parser *ast.Parser, filePath string, cfg *Config) ([]*ast.Funct
 }
 
 // scanDirectory recursively scans a directory for Go files and parses them.
-func scanDirectory(parser *ast.Parser, dirPath string, cfg *Config) ([]*ast.Function, error) {
+func scanDirectory(parser *ast.Parser, dirPath string, cfg *config.Config, verbose bool) ([]*ast.Function, error) {
 	info, err := os.Stat(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot access %s: %w", dirPath, err)
 	}
 
 	if !info.IsDir() {
-		return parseGoFile(parser, dirPath, cfg)
+		return parseGoFile(parser, dirPath, cfg, verbose)
 	}
 
 	var allFunctions []*ast.Function
-	walkFunc := createWalkFunc(parser, cfg, &allFunctions)
+	walkFunc := createWalkFunc(parser, cfg, &allFunctions, verbose)
 
 	err = filepath.Walk(dirPath, walkFunc)
 	if err != nil {
@@ -309,10 +418,10 @@ func scanDirectory(parser *ast.Parser, dirPath string, cfg *Config) ([]*ast.Func
 }
 
 // createWalkFunc creates a filepath.WalkFunc for directory traversal.
-func createWalkFunc(parser *ast.Parser, cfg *Config, allFunctions *[]*ast.Function) filepath.WalkFunc {
+func createWalkFunc(parser *ast.Parser, cfg *config.Config, allFunctions *[]*ast.Function, verbose bool) filepath.WalkFunc {
 	return func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
-			if cfg.verbose {
+			if verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error accessing %s: %v\n", path, err)
 			}
 			return nil
@@ -323,25 +432,25 @@ func createWalkFunc(parser *ast.Parser, cfg *Config, allFunctions *[]*ast.Functi
 		}
 
 		if shouldIgnoreFile(path, cfg) {
-			if cfg.verbose {
+			if verbose {
 				_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Ignoring %s\n", path)
 			}
 			return nil
 		}
 
-		return processGoFile(parser, path, cfg, allFunctions)
+		return processGoFile(parser, path, cfg, allFunctions, verbose)
 	}
 }
 
 // processGoFile parses a Go file and adds functions to the collection.
-func processGoFile(parser *ast.Parser, path string, cfg *Config, allFunctions *[]*ast.Function) error {
-	if cfg.verbose {
+func processGoFile(parser *ast.Parser, path string, cfg *config.Config, allFunctions *[]*ast.Function, verbose bool) error {
+	if verbose {
 		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Parsing file: %s\n", path)
 	}
 
-	functions, parseErr := parseGoFile(parser, path, cfg)
+	functions, parseErr := parseGoFile(parser, path, cfg, verbose)
 	if parseErr != nil {
-		if cfg.verbose {
+		if verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Error parsing %s: %v\n", path, parseErr)
 		}
 		return nil
@@ -352,7 +461,7 @@ func processGoFile(parser *ast.Parser, path string, cfg *Config, allFunctions *[
 }
 
 // shouldIgnoreFile determines if a file should be ignored based on configuration.
-func shouldIgnoreFile(filePath string, cfg *Config) bool {
+func shouldIgnoreFile(filePath string, cfg *config.Config) bool {
 	// Skip hidden files and directories
 	base := filepath.Base(filePath)
 	if strings.HasPrefix(base, ".") {
@@ -374,8 +483,8 @@ func shouldIgnoreFile(filePath string, cfg *Config) bool {
 	}
 
 	// Check .similarityignore file patterns
-	if cfg.ignoreFile != "" {
-		return matchesIgnorePatterns(filePath, cfg.ignoreFile)
+	if cfg.Ignore.DefaultFile != "" {
+		return matchesIgnorePatterns(filePath, cfg.GetIgnoreFilePath())
 	}
 
 	return false

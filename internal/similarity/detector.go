@@ -10,31 +10,14 @@ import (
 	"go/token"
 
 	"github.com/paveg/similarity-go/internal/ast"
+	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/pkg/mathutil"
-)
-
-const (
-	// Similarity thresholds and weights.
-	defaultSimilarOperationsThreshold = 0.5
-	differentSignatureWeight          = 0.3
-	statementCountDifferencePenalty   = 0.5
-
-	// Similarity algorithm weights.
-	treeEditWeight        = 0.3
-	tokenSimilarityWeight = 0.3
-	structuralWeight      = 0.25
-	signatureWeight       = 0.15
-
-	// Early termination thresholds.
-	maxSignatureLengthDifference = 50    // Max difference in signature length
-	maxLineDifferenceRatio       = 3.0   // Max ratio between function line counts
-	minSimilarityThreshold       = 0.1   // Below this, functions are too different
-	maxCacheSize                 = 10000 // Max number of cached similarity results
 )
 
 // Detector handles similarity detection between functions.
 type Detector struct {
 	threshold       float64
+	config          *config.Config
 	similarityCache map[string]float64 // Cache for similarity results
 }
 
@@ -45,10 +28,21 @@ type Match struct {
 	Similarity float64
 }
 
-// NewDetector creates a new similarity detector with the given threshold.
+// NewDetector creates a new similarity detector with the given threshold and configuration.
 func NewDetector(threshold float64) *Detector {
+	cfg, _ := config.Load("") // Load default config, ignore errors for backward compatibility
 	return &Detector{
 		threshold:       threshold,
+		config:          cfg,
+		similarityCache: make(map[string]float64),
+	}
+}
+
+// NewDetectorWithConfig creates a new similarity detector with explicit configuration.
+func NewDetectorWithConfig(threshold float64, cfg *config.Config) *Detector {
+	return &Detector{
+		threshold:       threshold,
+		config:          cfg,
 		similarityCache: make(map[string]float64),
 	}
 }
@@ -76,7 +70,7 @@ func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 	// Early termination: quick signature-based filtering
 	if !d.couldBeSimilar(func1, func2) {
 		// Cache the result (with size limit)
-		if len(d.similarityCache) < maxCacheSize {
+		if len(d.similarityCache) < d.config.Similarity.Limits.MaxCacheSize {
 			d.similarityCache[cacheKey] = 0.0
 		}
 		return 0.0 // Functions are too different to be similar
@@ -102,10 +96,11 @@ func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 
 	// Weighted combination: prioritize tree edit and token similarity
 	// as they are more sophisticated algorithms
-	result := treeEditWeight*treeEditSim + tokenSimilarityWeight*tokenSim + structuralWeight*structuralSim + signatureWeight*signatureSim
+	weights := d.config.Similarity.Weights
+	result := weights.TreeEdit*treeEditSim + weights.TokenSimilarity*tokenSim + weights.Structural*structuralSim + weights.Signature*signatureSim
 
 	// Cache the result for future use (with size limit)
-	if len(d.similarityCache) < maxCacheSize {
+	if len(d.similarityCache) < d.config.Similarity.Limits.MaxCacheSize {
 		d.similarityCache[cacheKey] = result
 	}
 
@@ -144,7 +139,7 @@ func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
 	sig1 := func1.GetSignature()
 	sig2 := func2.GetSignature()
 
-	if mathutil.Abs(len(sig1)-len(sig2)) > maxSignatureLengthDifference {
+	if mathutil.Abs(len(sig1)-len(sig2)) > d.config.Similarity.Limits.MaxSignatureLengthDiff {
 		return false
 	}
 
@@ -157,7 +152,8 @@ func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
 	}
 
 	ratio := float64(lines1) / float64(lines2)
-	if ratio > maxLineDifferenceRatio || ratio < 1.0/maxLineDifferenceRatio {
+	maxRatio := d.config.Similarity.Limits.MaxLineDifferenceRatio
+	if ratio > maxRatio || ratio < 1.0/maxRatio {
 		return false
 	}
 
@@ -169,7 +165,8 @@ func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
 			stmt2Count := len(func2.AST.Body.List)
 
 			// If one is empty and other has many statements, likely different
-			if (stmt1Count == 0 && stmt2Count > 5) || (stmt2Count == 0 && stmt1Count > 5) {
+			maxEmpty := d.config.Processing.MaxEmptyVsPopulated
+			if (stmt1Count == 0 && stmt2Count > maxEmpty) || (stmt2Count == 0 && stmt1Count > maxEmpty) {
 				return false
 			}
 		}
@@ -332,10 +329,10 @@ func (d *Detector) calculateStructuralSimilarity(func1, func2 *ast.Function) flo
 	// If functions have different signatures but similar body structure,
 	// return lower similarity based on the operation similarity
 	if bodyScore > 0.7 && d.hasSimilarOperations(func1, func2) {
-		return defaultSimilarOperationsThreshold
+		return d.config.Similarity.Thresholds.DefaultSimilarOperations
 	}
 
-	return bodyScore * differentSignatureWeight // Different signatures result in lower similarity
+	return bodyScore * d.config.Similarity.Weights.DifferentSignature // Different signatures result in lower similarity
 }
 
 // calculateSignatureSimilarity compares function signatures.
@@ -421,7 +418,7 @@ func (d *Detector) compareBodyStructure(body1, body2 *goast.BlockStmt) float64 {
 
 	// Simple structural comparison based on statement counts and types
 	if len(body1.List) != len(body2.List) {
-		return statementCountDifferencePenalty // Different number of statements
+		return d.config.Similarity.Thresholds.StatementCountPenalty // Different number of statements
 	}
 
 	matches := 0

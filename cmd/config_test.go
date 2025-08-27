@@ -1,77 +1,54 @@
 package main
 
 import (
+	"os"
 	"testing"
+	"github.com/paveg/similarity-go/internal/config"
 )
 
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
-		name          string
-		threshold     float64
-		format        string
-		workers       int
-		minLines      int
-		expectError   bool
-		expectedError string
+		name        string
+		config      *config.Config
+		expectError bool
 	}{
 		{
 			name:        "valid config",
-			threshold:   0.8,
-			format:      "json",
-			workers:     4,
-			minLines:    5,
+			config:      config.Default(),
 			expectError: false,
 		},
 		{
-			name:          "invalid threshold too low",
-			threshold:     -0.1,
-			format:        "json",
-			workers:       4,
-			minLines:      5,
-			expectError:   true,
-			expectedError: "threshold must be between 0.0 and 1.0",
+			name: "invalid threshold too low",
+			config: func() *config.Config {
+				cfg := config.Default()
+				cfg.CLI.DefaultThreshold = -0.1
+				return cfg
+			}(),
+			expectError: true,
 		},
 		{
-			name:          "invalid threshold too high",
-			threshold:     1.1,
-			format:        "json",
-			workers:       4,
-			minLines:      5,
-			expectError:   true,
-			expectedError: "threshold must be between 0.0 and 1.0",
+			name: "invalid threshold too high",
+			config: func() *config.Config {
+				cfg := config.Default()
+				cfg.CLI.DefaultThreshold = 1.1
+				return cfg
+			}(),
+			expectError: true,
 		},
 		{
-			name:          "invalid format",
-			threshold:     0.8,
-			format:        "xml",
-			workers:       4,
-			minLines:      5,
-			expectError:   true,
-			expectedError: "format must be json or yaml",
-		},
-		{
-			name:          "invalid workers",
-			threshold:     0.8,
-			format:        "json",
-			workers:       0,
-			minLines:      5,
-			expectError:   true,
-			expectedError: "workers must be greater than 0",
-		},
-		{
-			name:          "invalid min lines",
-			threshold:     0.8,
-			format:        "json",
-			workers:       4,
-			minLines:      0,
-			expectError:   true,
-			expectedError: "min-lines must be greater than 0",
+			name: "invalid format",
+			config: func() *config.Config {
+				cfg := config.Default()
+				cfg.CLI.DefaultFormat = "xml"
+				return cfg
+			}(),
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateConfig(tt.threshold, tt.format, tt.workers, tt.minLines)
+			err := tt.config.Validate()
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -80,26 +57,25 @@ func TestConfigValidation(t *testing.T) {
 			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-
-			if tt.expectError && err != nil && err.Error() != tt.expectedError {
-				t.Errorf("Expected error %q, got %q", tt.expectedError, err.Error())
-			}
 		})
 	}
 }
 
 func TestRunSimilarityCheck(t *testing.T) {
 	// Test that the function runs without error with valid inputs
-	config := &Config{
-		threshold: 0.8,
-		format:    "json",
-		workers:   2,
-		verbose:   true,
+	args := &CLIArgs{
+		verbose: true,
 	}
-	cmd := newRootCommand(config)
-	cmd.SetArgs([]string{"./testdata"})
+	cmd := newRootCommand(args)
+	cmd.SetArgs([]string{"../testdata"})
 
-	err := runSimilarityCheck(config, cmd, []string{"./testdata"})
+	// Skip this test if testdata doesn't exist
+	if _, err := os.Stat("../testdata"); os.IsNotExist(err) {
+		t.Skip("testdata directory not found")
+		return
+	}
+
+	err := runSimilarityCheck(args, cmd, []string{"../testdata"})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

@@ -1,79 +1,36 @@
-# Similarity-go configuration file
-# This file contains optimal settings determined through analysis
+cli:
+  default_threshold: 0.7
+  default_min_lines: 5
+  default_format: json
+  default_workers: 0  # 0 means use runtime.NumCPU()
+  default_cache: true
 
-# Similarity detection settings
 similarity:
-  # Threshold for similarity detection (0.0-1.0)
-  # 0.8 provides optimal balance between detection sensitivity and noise
-  # Analysis results:
-  # - 0.7: 941 groups (too noisy)
-  # - 0.8: 319 groups (optimal)
-  # - 0.9: 120 groups (too restrictive)
-  threshold: 0.8
-
-  # Minimum lines for function analysis
-  min_lines: 5
-
-  # Output format (json, yaml)
-  format: "json"
-
-# Processing settings
-processing:
-  # Number of worker goroutines (0 = number of CPUs)
-  workers: 0
-  
-  # Enable caching for better performance
-  cache: true
-
-  # Verbose output for debugging
-  verbose: false
-
-# File filtering settings
-filtering:
-  # Directories to ignore during scanning
-  ignore_dirs:
-    - "vendor"
-    - ".git"
-    - "bin"
-    - "build"
-    - "dist"
-    - "target"
-    - "node_modules"
-
-  # File patterns to ignore
-  ignore_patterns:
-    - ".*"           # Hidden files
-    - "*_test.go"    # Test files (optional)
-    - "*.pb.go"      # Protocol buffer generated files
-    - "*.gen.go"     # Generated files
-
-  # File patterns to include (overrides ignore_patterns)
-  include_patterns:
-    - "*.go"
-
-# Analysis settings  
-analysis:
-  # Algorithm weights for multi-factor similarity detection
+  thresholds:
+    default_similar_operations: 0.5
+    statement_count_penalty: 0.5
+    min_similarity: 0.1
   weights:
-    tree_edit_distance: 0.4
-    token_similarity: 0.4
-    signature_similarity: 0.2
-    
-  # Deduplication settings
-  dedupe:
-    # Enable hash-based early termination
-    enable: true
-    
-    # Hash similarity threshold for early termination
-    hash_threshold: 0.95
+    tree_edit: 0.3
+    token_similarity: 0.3
+    structural: 0.25
+    signature: 0.15
+    different_signature: 0.3
+  limits:
+    max_signature_length_diff: 50
+    max_line_difference_ratio: 3.0
+    max_cache_size: 10000
 
-# Output settings
+processing:
+  max_empty_vs_populated: 5
+
 output:
-  # Include refactoring suggestions
-  include_suggestions: true
-  
-  # Maximum number of similar groups to report (0 = unlimited)
-  max_groups: 0
-  
-  # Sort results by similarity score (desc) or alphabetically (asc)
-  sort_by: "similarity"
+  refactor_suggestion: "Consider extracting common logic into a shared function"
+
+ignore:
+  default_file: ".similarityignore"
+  patterns:
+    - "*_test.go"
+    - "testdata/"
+    - "vendor/"
+    - ".git/"

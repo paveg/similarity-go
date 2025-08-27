@@ -46,8 +46,8 @@ func TestRootCommand(t *testing.T) {
 			// Capture output
 			var buf bytes.Buffer
 
-			config := &Config{}
-			cmd := newRootCommand(config)
+			args := &CLIArgs{}
+			cmd := newRootCommand(args)
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
 			cmd.SetArgs(tt.args)
@@ -110,8 +110,8 @@ func TestRootCommandFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := &Config{}
-			cmd := newRootCommand(config)
+			args := &CLIArgs{}
+			cmd := newRootCommand(args)
 			cmd.SetArgs(tt.args)
 
 			// Parse flags without executing
