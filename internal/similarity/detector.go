@@ -178,10 +178,7 @@ func (d *Detector) couldBeSimilar(func1, func2 *ast.Function) bool {
 // getCacheKey creates a consistent cache key for two function hashes.
 // Always puts the smaller hash first to ensure (A,B) and (B,A) have the same key.
 func (d *Detector) getCacheKey(hash1, hash2 string) string {
-	if hash1 < hash2 {
-		return hash1 + "|" + hash2
-	}
-	return hash2 + "|" + hash1
+	return mathutil.CreateConsistentKey(hash1, hash2)
 }
 
 // compareNormalizedAST compares the normalized AST structures of two functions.
@@ -491,10 +488,7 @@ func (d *Detector) stringSimilarity(s1, s2 string) float64 {
 	}
 
 	// Simple similarity based on length difference
-	maxLen := len(s1)
-	if len(s2) > maxLen {
-		maxLen = len(s2)
-	}
+	maxLen := max(len(s1), len(s2))
 
 	diff := mathutil.Abs(len(s1) - len(s2))
 

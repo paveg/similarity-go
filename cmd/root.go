@@ -14,6 +14,7 @@ import (
 	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/similarity"
+	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
 var (
@@ -277,10 +278,7 @@ func convertGroupsToMatches(
 
 // generateMatchKey creates a consistent key for a pair of function hashes.
 func generateMatchKey(hash1, hash2 string) string {
-	if hash1 > hash2 {
-		return hash2 + "|" + hash1
-	}
-	return hash1 + "|" + hash2
+	return mathutil.CreateConsistentKey(hash1, hash2)
 }
 
 // findConnectedGroups uses DFS to find connected components in the similarity graph.
