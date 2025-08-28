@@ -14,6 +14,7 @@ import (
 	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/similarity"
+	"github.com/paveg/similarity-go/internal/worker"
 	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
@@ -129,8 +130,43 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Found %d functions for analysis\n", len(allFunctions))
 	}
 
-	// Find similar functions
-	similarMatches := detector.FindSimilarFunctions(allFunctions)
+	// Find similar functions (use parallel processing if workers > 1)
+	var similarMatches []similarity.Match
+	
+	if cfg.CLI.DefaultWorkers > 1 {
+		// Use parallel processing
+		if args.verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using parallel processing with %d workers\n", cfg.CLI.DefaultWorkers)
+		}
+		
+		// Create progress callback for verbose mode
+		var progressCallback func(completed, total int)
+		if args.verbose {
+			progressCallback = func(completed, total int) {
+				if completed%100 == 0 || completed == total {
+					_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)", 
+						completed, total, float64(completed)/float64(total)*100)
+					if completed == total {
+						_, _ = fmt.Fprintf(os.Stderr, "\n")
+					}
+				}
+			}
+		}
+		
+		// Use worker for parallel processing
+		parallelWorker := worker.NewSimilarityWorker(detector, cfg.CLI.DefaultWorkers, cfg.CLI.DefaultThreshold)
+		var parallelErr error
+		similarMatches, parallelErr = parallelWorker.FindSimilarFunctions(allFunctions, progressCallback)
+		if parallelErr != nil {
+			return fmt.Errorf("parallel similarity calculation failed: %w", parallelErr)
+		}
+	} else {
+		// Use serial processing
+		if args.verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using serial processing\n")
+		}
+		similarMatches = detector.FindSimilarFunctions(allFunctions)
+	}
 
 	// Group similar matches for better output formatting
 	similarGroups := groupSimilarMatches(similarMatches)
