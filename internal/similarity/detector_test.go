@@ -1,6 +1,9 @@
 package similarity
 
 import (
+	goast "go/ast"
+	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/paveg/similarity-go/internal/ast"
@@ -350,5 +353,377 @@ func hello() string {
 				t.Errorf("Expected %v, got %v", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestDetector_CouldBeSimilar(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Create functions with different characteristics
+	shortFunc := &ast.Function{Name: "short", LineCount: 5}
+	longFunc := &ast.Function{Name: "long", LineCount: 50}
+	nilFunc := &ast.Function{Name: "nil", LineCount: 0}
+
+	tests := []struct {
+		name     string
+		func1    *ast.Function
+		func2    *ast.Function
+		expected bool
+	}{
+		{
+			name:     "similar sized functions",
+			func1:    &ast.Function{Name: "test1", LineCount: 10},
+			func2:    &ast.Function{Name: "test2", LineCount: 12},
+			expected: true,
+		},
+		{
+			name:     "very different sized functions",
+			func1:    shortFunc,
+			func2:    longFunc,
+			expected: false,
+		},
+		{
+			name:     "nil line count functions",
+			func1:    nilFunc,
+			func2:    &ast.Function{Name: "test", LineCount: 5},
+			expected: true, // Can't determine, let full comparison decide
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detector.couldBeSimilar(tt.func1, tt.func2)
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestDetector_GetCacheKey(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	hash1 := "abc123"
+	hash2 := "def456"
+
+	// Test that cache key is consistent regardless of order
+	key1 := detector.getCacheKey(hash1, hash2)
+	key2 := detector.getCacheKey(hash2, hash1)
+
+	if key1 != key2 {
+		t.Errorf("Expected consistent cache keys, got %s and %s", key1, key2)
+	}
+
+	// Test that different hashes produce different keys
+	hash3 := "ghi789"
+	key3 := detector.getCacheKey(hash1, hash3)
+
+	if key1 == key3 {
+		t.Error("Expected different cache keys for different hash combinations")
+	}
+}
+
+func TestDetector_CompareNormalizedAST(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Create test functions
+	source1 := `package main
+func add(x, y int) int {
+	return x + y
+}`
+
+	source2 := `package main
+func add(a, b int) int {
+	return a + b
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "add")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "add")
+
+	// These should be considered identical after normalization
+	result := detector.compareNormalizedAST(func1, func2)
+	if !result {
+		t.Error("Expected normalized ASTs to be identical")
+	}
+
+	// Test with nil functions
+	nilFunc := &ast.Function{Name: "nil", AST: nil}
+	result = detector.compareNormalizedAST(func1, nilFunc)
+	if result {
+		t.Error("Expected false when comparing with nil AST")
+	}
+}
+
+func TestDetector_CalculateTreeEditSimilarity(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with identical functions
+	source := `package main
+func test() int {
+	return 42
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source, "test")
+	func2 := testhelpers.CreateFunctionFromSource(t, source, "test")
+
+	similarity := detector.calculateTreeEditSimilarity(func1, func2)
+	if similarity < 0.9 {
+		t.Errorf("Expected high similarity for identical functions, got %.2f", similarity)
+	}
+
+	// Test with nil functions
+	similarity = detector.calculateTreeEditSimilarity(nil, func1)
+	if similarity != 0.0 {
+		t.Errorf("Expected 0.0 for nil function, got %.2f", similarity)
+	}
+}
+
+func TestDetector_CountASTNodes(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with nil node
+	count := detector.countASTNodes(nil)
+	if count != 0 {
+		t.Errorf("Expected 0 for nil node, got %d", count)
+	}
+
+	// Test with simple function
+	source := `package main
+func simple() {
+	x := 1
+	return
+}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "simple")
+	count = detector.countASTNodes(fn.AST)
+	if count <= 0 {
+		t.Errorf("Expected positive count for function AST, got %d", count)
+	}
+}
+
+func TestDetector_CalculateStructuralSimilarity(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with functions that have same signature
+	source1 := `package main
+func test(a int) int {
+	return a + 1
+}`
+
+	source2 := `package main
+func test(a int) int {
+	return a * 2
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "test")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "test")
+
+	similarity := detector.calculateStructuralSimilarity(func1, func2)
+	if similarity <= 0 {
+		t.Errorf("Expected positive similarity for same signature functions, got %.2f", similarity)
+	}
+
+	// Test with nil AST
+	nilFunc := &ast.Function{Name: "nil", AST: nil}
+	similarity = detector.calculateStructuralSimilarity(func1, nilFunc)
+	if similarity != 0.0 {
+		t.Errorf("Expected 0.0 for nil AST, got %.2f", similarity)
+	}
+}
+
+func TestDetector_CalculateSignatureSimilarity(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with identical signatures
+	func1 := &ast.Function{Name: "test1"}
+	func2 := &ast.Function{Name: "test2"}
+
+	// Mock GetSignature to return predictable values
+	func1.AST = &goast.FuncDecl{
+		Type: &goast.FuncType{
+			Params: &goast.FieldList{
+				List: []*goast.Field{
+					{Type: &goast.Ident{Name: "int"}},
+				},
+			},
+		},
+	}
+	func2.AST = &goast.FuncDecl{
+		Type: &goast.FuncType{
+			Params: &goast.FieldList{
+				List: []*goast.Field{
+					{Type: &goast.Ident{Name: "int"}},
+				},
+			},
+		},
+	}
+
+	similarity := detector.calculateSignatureSimilarity(func1, func2)
+	if similarity != 1.0 {
+		t.Errorf("Expected 1.0 for identical signatures, got %.2f", similarity)
+	}
+}
+
+func TestDetector_GetStructuralSignature(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with nil AST
+	nilFunc := &ast.Function{Name: "nil", AST: nil}
+	sig := detector.getStructuralSignature(nilFunc)
+	if sig != "" {
+		t.Errorf("Expected empty signature for nil AST, got %s", sig)
+	}
+
+	// Test with function
+	source := `package main
+func test(a int, b string) (int, error) {
+	return 0, nil
+}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "test")
+	sig = detector.getStructuralSignature(fn)
+	if sig == "" {
+		t.Error("Expected non-empty signature for valid function")
+	}
+	if !strings.Contains(sig, "func(") {
+		t.Errorf("Expected signature to contain 'func(', got %s", sig)
+	}
+}
+
+func TestDetector_CompareBodyStructure(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with nil bodies
+	similarity := detector.compareBodyStructure(nil, nil)
+	if similarity != 1.0 {
+		t.Errorf("Expected 1.0 for both nil bodies, got %.2f", similarity)
+	}
+
+	// Test with one nil body
+	source := `package main
+func test() {
+	x := 1
+}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "test")
+	similarity = detector.compareBodyStructure(fn.AST.Body, nil)
+	if similarity != 0.0 {
+		t.Errorf("Expected 0.0 for nil body comparison, got %.2f", similarity)
+	}
+}
+
+func TestDetector_StatementsStructurallyEqual(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Create different statement types
+	returnStmt1 := &goast.ReturnStmt{}
+	returnStmt2 := &goast.ReturnStmt{}
+	assignStmt := &goast.AssignStmt{}
+
+	// Same types should be equal
+	if !detector.statementsStructurallyEqual(returnStmt1, returnStmt2) {
+		t.Error("Expected same statement types to be structurally equal")
+	}
+
+	// Different types should not be equal
+	if detector.statementsStructurallyEqual(returnStmt1, assignStmt) {
+		t.Error("Expected different statement types to not be structurally equal")
+	}
+}
+
+func TestDetector_GenerateASTHash(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with nil node
+	hash := detector.generateASTHash(nil)
+	if hash != "" {
+		t.Errorf("Expected empty hash for nil node, got %s", hash)
+	}
+
+	// Test with valid AST node
+	source := `package main
+func test() {
+	return
+}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "test")
+	hash = detector.generateASTHash(fn.AST)
+	if hash == "" {
+		t.Error("Expected non-empty hash for valid AST")
+	}
+}
+
+func TestDetector_TypeToString(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	tests := []struct {
+		name     string
+		expr     goast.Expr
+		expected string
+	}{
+		{
+			name:     "simple identifier",
+			expr:     &goast.Ident{Name: "int"},
+			expected: "int",
+		},
+		{
+			name:     "pointer type",
+			expr:     &goast.StarExpr{X: &goast.Ident{Name: "string"}},
+			expected: "*string",
+		},
+		{
+			name:     "selector expression",
+			expr:     &goast.SelectorExpr{X: &goast.Ident{Name: "fmt"}, Sel: &goast.Ident{Name: "Print"}},
+			expected: "fmt.Print",
+		},
+		{
+			name:     "unknown type",
+			expr:     &goast.BasicLit{Kind: token.INT, Value: "42"},
+			expected: "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detector.typeToString(tt.expr)
+			if result != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestDetector_HasSimilarOperations(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	// Test with functions that have binary expressions
+	source1 := `package main
+func add(a, b int) int {
+	return a + b
+}`
+
+	source2 := `package main
+func multiply(a, b int) int {
+	return a * b
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "add")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "multiply")
+
+	result := detector.hasSimilarOperations(func1, func2)
+	if !result {
+		t.Error("Expected functions with binary operations to be considered similar")
+	}
+
+	// Test with function without binary expression
+	source3 := `package main
+func hello() string {
+	return "hello"
+}`
+
+	func3 := testhelpers.CreateFunctionFromSource(t, source3, "hello")
+	result = detector.hasSimilarOperations(func1, func3)
+	if result {
+		t.Error("Expected functions with different operation types to not be similar")
 	}
 }
