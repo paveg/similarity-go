@@ -189,3 +189,90 @@ func TestFindConfigFile(t *testing.T) {
 		t.Errorf("findConfigFile() = %s, expected %s", found, expected)
 	}
 }
+
+func TestLoadWithErrors(t *testing.T) {
+	// Test with nonexistent file (should use defaults)
+	cfg, err := Load("/nonexistent/config.yaml")
+	if err != nil {
+		t.Errorf("expected no error with nonexistent file, got: %v", err)
+	}
+	if cfg == nil {
+		t.Error("expected default config when file doesn't exist")
+	}
+
+	// Test with invalid YAML content
+	tempDir := t.TempDir()
+	invalidFile := filepath.Join(tempDir, "invalid.yaml")
+
+	invalidContent := "invalid: yaml: content: {\nunclosed"
+	if writeErr := os.WriteFile(invalidFile, []byte(invalidContent), 0644); writeErr != nil {
+		t.Fatalf("failed to create invalid config file: %v", writeErr)
+	}
+
+	_, err = Load(invalidFile)
+	if err == nil {
+		t.Error("expected error with invalid YAML content")
+	}
+}
+
+func TestSave(t *testing.T) {
+	cfg := Default()
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "test-config.yaml")
+
+	// Test successful save
+	err := cfg.Save(configFile)
+	if err != nil {
+		t.Errorf("expected no error saving config, got: %v", err)
+	}
+
+	// Verify file exists
+	if _, statErr := os.Stat(configFile); os.IsNotExist(statErr) {
+		t.Error("config file was not created")
+	}
+
+	// Test save to invalid directory
+	invalidPath := filepath.Join("/nonexistent", "config.yaml")
+	err = cfg.Save(invalidPath)
+	if err == nil {
+		t.Error("expected error saving to invalid directory")
+	}
+}
+
+func TestValidateEdgeCases(t *testing.T) {
+	// Test config with invalid CLI format
+	cfg := Default()
+	cfg.CLI.DefaultFormat = "invalid"
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Error("expected error with invalid format")
+	}
+
+	// Test config with negative cache size
+	cfg = Default()
+	cfg.Similarity.Limits.MaxCacheSize = -1
+
+	err = cfg.Validate()
+	if err == nil {
+		t.Error("expected error with negative cache size")
+	}
+}
+
+func TestGetIgnoreFilePathEdgeCases(t *testing.T) {
+	cfg := Default()
+
+	// Test with default ignore file path
+	path := cfg.GetIgnoreFilePath()
+	if path != ".similarityignore" {
+		t.Errorf("expected .similarityignore, got %s", path)
+	}
+
+	// Test with custom ignore file path
+	cfg.Ignore.DefaultFile = "/custom/path/.customignore"
+	path = cfg.GetIgnoreFilePath()
+	expected := "/custom/path/.customignore"
+	if path != expected {
+		t.Errorf("expected %s, got %s", expected, path)
+	}
+}
