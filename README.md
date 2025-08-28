@@ -59,7 +59,7 @@ make build-windows # Windows (amd64, arm64)
 
 ### Options
 
-- `--threshold, -t`: Similarity threshold (0.0-1.0, default: 0.7)
+- `--threshold, -t`: Similarity threshold (0.0-1.0, default: 0.8)
 - `--format, -f`: Output format (json|yaml, default: json)
 - `--workers, -w`: Number of parallel workers (default: CPU count)
 - `--cache`: Enable caching (default: true)

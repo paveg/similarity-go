@@ -36,7 +36,7 @@ Go ASTを利用した高性能なコード類似性検証CLIツール「similari
 similarity-go [flags] <targets...>
 
 主要フラグ:
---threshold, -t    類似度閾値 (default: 0.7)
+--threshold, -t    類似度閾値 (default: 0.8)
 --format, -f       出力形式 json|yaml (default: json)
 --workers, -w      並列処理数 (default: CPU数)
 --cache           キャッシュ利用 (default: true)
@@ -82,7 +82,7 @@ Result Aggregator → Output Formatter (JSON/YAML)
     "generated_at": "2024-01-01T12:00:00Z",
     "tool": "similarity-go",
     "config": {
-      "threshold": 0.7,
+      "threshold": 0.8,
       "min_lines": 5,
       "workers": 8
     }

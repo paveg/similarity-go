@@ -1,0 +1,36 @@
+cli:
+  default_threshold: 0.8
+  default_min_lines: 5
+  default_format: json
+  default_workers: 0  # 0 means use runtime.NumCPU()
+  default_cache: true
+
+similarity:
+  thresholds:
+    default_similar_operations: 0.5
+    statement_count_penalty: 0.5
+    min_similarity: 0.1
+  weights:
+    tree_edit: 0.3
+    token_similarity: 0.3
+    structural: 0.25
+    signature: 0.15
+    different_signature: 0.3
+  limits:
+    max_signature_length_diff: 50
+    max_line_difference_ratio: 3.0
+    max_cache_size: 10000
+
+processing:
+  max_empty_vs_populated: 5
+
+output:
+  refactor_suggestion: "Consider extracting common logic into a shared function"
+
+ignore:
+  default_file: ".similarityignore"
+  patterns:
+    - "*_test.go"
+    - "testdata/"
+    - "vendor/"
+    - ".git/"

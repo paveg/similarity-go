@@ -3,53 +3,32 @@ package mathutil_test
 import (
 	"testing"
 
+	"github.com/paveg/similarity-go/internal/testhelpers"
 	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
 func TestMin(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     int
-		expected int
-	}{
-		{"a less than b", 1, 2, 1},
-		{"a greater than b", 5, 3, 3},
-		{"a equal to b", 4, 4, 4},
-		{"negative numbers", -3, -1, -3},
-		{"mixed signs", -2, 3, -2},
+	tests := []testhelpers.MathTestCase{
+		{Name: "a less than b", A: 1, B: 2, Expected: 1},
+		{Name: "a greater than b", A: 5, B: 3, Expected: 3},
+		{Name: "a equal to b", A: 4, B: 4, Expected: 4},
+		{Name: "negative numbers", A: -3, B: -1, Expected: -3},
+		{Name: "mixed signs", A: -2, B: 3, Expected: -2},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := mathutil.Min(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("Min(%d, %d) = %d, expected %d", tt.a, tt.b, result, tt.expected)
-			}
-		})
-	}
+	testhelpers.ExecuteMathTest(t, tests, mathutil.Min, "Min")
 }
 
 func TestMax(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     int
-		expected int
-	}{
-		{"a less than b", 1, 2, 2},
-		{"a greater than b", 5, 3, 5},
-		{"a equal to b", 4, 4, 4},
-		{"negative numbers", -3, -1, -1},
-		{"mixed signs", -2, 3, 3},
+	tests := []testhelpers.MathTestCase{
+		{Name: "a less than b", A: 1, B: 2, Expected: 2},
+		{Name: "a greater than b", A: 5, B: 3, Expected: 5},
+		{Name: "a equal to b", A: 4, B: 4, Expected: 4},
+		{Name: "negative numbers", A: -3, B: -1, Expected: -1},
+		{Name: "mixed signs", A: -2, B: 3, Expected: 3},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := mathutil.Max(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("Max(%d, %d) = %d, expected %d", tt.a, tt.b, result, tt.expected)
-			}
-		})
-	}
+	testhelpers.ExecuteMathTest(t, tests, mathutil.Max, "Max")
 }
 
 func TestAbs(t *testing.T) {

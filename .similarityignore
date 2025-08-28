@@ -1,0 +1,5 @@
+*_test.go
+testdata/
+vendor/
+.git/
+testhelpers/
