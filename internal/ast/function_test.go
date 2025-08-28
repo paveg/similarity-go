@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 
 	astpkg "github.com/paveg/similarity-go/internal/ast"
@@ -433,4 +434,207 @@ func containsAt(s, substr string, start int) bool {
 	}
 
 	return containsAt(s, substr, start+1)
+}
+
+func TestFunction_DeepCopy(t *testing.T) {
+	// Test deep copy functionality through Normalize() which uses it
+	source := `package main
+func complexFunction(a, b int) (int, error) {
+	if a == 0 {
+		return 0, errors.New("invalid input")
+	}
+	
+	for i := 0; i < b; i++ {
+		a = a + i
+	}
+	
+	result := a * b
+	return result, nil
+}`
+
+	function := createFunctionFromSource(t, source, "complexFunction")
+	normalized := function.Normalize()
+
+	// Verify that normalization worked (it should have succeeded if deep copy worked)
+	if normalized == nil {
+		t.Error("Expected normalized function, got nil")
+		return
+	}
+
+	// Verify the normalized function has the same name but different AST
+	if normalized.Name != function.Name {
+		t.Errorf("Expected same name, got %s vs %s", normalized.Name, function.Name)
+	}
+
+	// Verify that deep copy created a separate AST
+	if normalized.AST == function.AST {
+		t.Error("Expected different AST after normalization (deep copy)")
+	}
+}
+
+func TestFunction_NormalizeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		function       *astpkg.Function
+		expectSameFunc bool
+		shouldPanic    bool
+	}{
+		{
+			name: "function with nil AST returns itself",
+			function: &astpkg.Function{
+				Name: "test",
+				File: "test.go",
+				AST:  nil,
+			},
+			expectSameFunc: true,
+			shouldPanic:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Error("Expected panic but didn't get one")
+					}
+				}()
+			}
+
+			got := tt.function.Normalize()
+
+			if tt.expectSameFunc {
+				if got != tt.function {
+					t.Error("Expected same function instance when AST is nil")
+				}
+			} else {
+				if got == nil {
+					t.Error("Expected non-nil result")
+				}
+			}
+		})
+	}
+}
+
+func TestFunction_DeepCopyVariousStatements(t *testing.T) {
+	// Test deep copy with various statement types to improve coverage
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "function with return statement",
+			source: `package main
+func returnFunc() int {
+	x := 42
+	return x + 1
+}`,
+		},
+		{
+			name: "function with assignment",
+			source: `package main
+func assignFunc() {
+	var x, y int
+	x = 5
+	y = x * 2
+}`,
+		},
+		{
+			name: "function with if statement with else",
+			source: `package main
+func ifElseFunc(a int) int {
+	var result int
+	if a > 0 {
+		result = a
+	} else {
+		result = -a
+	}
+	return result
+}`,
+		},
+		{
+			name: "function with for loop with init and post",
+			source: `package main
+func forLoopFunc() int {
+	sum := 0
+	for i := 0; i < 10; i++ {
+		sum += i
+	}
+	return sum
+}`,
+		},
+		{
+			name: "function with various expressions",
+			source: `package main
+func exprFunc(a, b int) int {
+	result := a + b
+	result = result * 2
+	result = -result
+	funcCall(result)
+	return result
+}
+func funcCall(x int) {}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			function := createFunctionFromSource(t, tt.source, extractFuncName(tt.source))
+
+			// Test that normalization works (exercises all copy methods)
+			normalized := function.Normalize()
+			if normalized == nil {
+				t.Errorf("Expected normalization to succeed for %s", tt.name)
+			}
+
+			// Verify deep copy created different instances
+			if normalized != nil && normalized.AST == function.AST {
+				t.Errorf("Expected deep copy to create different AST instances for %s", tt.name)
+			}
+		})
+	}
+}
+
+// Helper to extract function name from source.
+func extractFuncName(source string) string {
+	// Simple extraction - look for "func functionName"
+	lines := strings.Split(source, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "func ") && strings.Contains(line, "(") {
+			start := strings.Index(line, "func ") + 5
+			end := strings.Index(line[start:], "(")
+			if end > 0 {
+				return strings.TrimSpace(line[start : start+end])
+			}
+		}
+	}
+	return "unknownFunc"
+}
+
+func TestFunction_CopyMethods(t *testing.T) {
+	// Test with a function that has various statement types
+	source := `package main
+func testFunction() {
+	var x int
+	x = 5
+	if x > 0 {
+		return
+	}
+	for i := 0; i < 10; i++ {
+		x++
+	}
+}`
+
+	function := createFunctionFromSource(t, source, "testFunction")
+
+	// Test that normalization works (which internally uses copy methods)
+	normalized := function.Normalize()
+	if normalized == nil {
+		t.Error("Expected normalization to succeed with various statement types")
+	}
+
+	// Test that the original and normalized have different ASTs (deep copy worked)
+	if normalized != nil && normalized.AST == function.AST {
+		t.Error("Expected deep copy to create different AST instances")
+	}
 }

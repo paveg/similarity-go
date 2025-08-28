@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/testhelpers"
 )
 
@@ -493,6 +494,241 @@ func test() {
 			result := getNodeType(nodeToTest)
 			if result != tt.expected {
 				t.Errorf("getNodeType() = %s, want %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTokenizeAndNormalize(t *testing.T) {
+	// Test the private tokenizeAndNormalize function through NormalizeTokenSequence
+	source := `package main
+func example(x int, name string) bool {
+	if x > 0 && len(name) > 0 {
+		return true
+	}
+	return false
+}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "example")
+	tokens := NormalizeTokenSequence(fn)
+
+	// Verify key tokens are present and normalized
+	expectedTokens := []string{"func", "IDENT", "int", "string", "bool", "if", "&&", "return", "true", "false"}
+
+	tokenMap := make(map[string]bool)
+	for _, token := range tokens {
+		tokenMap[token] = true
+	}
+
+	// Check that some key tokens are present (not all may be)
+	foundTokens := 0
+	for _, expected := range expectedTokens {
+		if tokenMap[expected] {
+			foundTokens++
+		}
+	}
+	if foundTokens < 5 { // At least 5 of the expected tokens should be found
+		t.Errorf("Expected at least 5 key tokens, found %d in: %v", foundTokens, tokens)
+	}
+
+	// Just verify that tokens are generated (specific tokens may vary)
+	if len(tokens) == 0 {
+		t.Error("Expected non-empty token sequence")
+	}
+}
+
+func TestIsBasicType(t *testing.T) {
+	// Test through token normalization since isBasicType is private
+	source := `package main
+func test(a int, b string, c bool, d float64, e customType) {}`
+
+	fn := testhelpers.CreateFunctionFromSource(t, source, "test")
+	tokens := NormalizeTokenSequence(fn)
+
+	// Basic types should appear as-is
+	basicTypes := []string{"int", "string", "bool", "float64"}
+	tokenMap := make(map[string]bool)
+	for _, token := range tokens {
+		tokenMap[token] = true
+	}
+
+	for _, basicType := range basicTypes {
+		if !tokenMap[basicType] {
+			t.Errorf("Basic type %s should appear in tokens: %v", basicType, tokens)
+		}
+	}
+
+	// Custom types should be normalized to IDENT
+	if tokenMap["customType"] {
+		t.Error("Custom type should be normalized to IDENT")
+	}
+}
+
+func TestCalculateChildrenDistance(t *testing.T) {
+	// Test through TreeEditDistance with functions that have different numbers of children
+	source1 := `package main
+func simple() {
+	x := 1
+}`
+
+	source2 := `package main  
+func complex() {
+	x := 1
+	y := 2  
+	z := 3
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "simple")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "complex")
+
+	distance := TreeEditDistance(func1.AST, func2.AST)
+
+	// Distance should be computed successfully
+	if distance < 0 {
+		t.Errorf("Expected non-negative distance, got %d", distance)
+	}
+}
+
+func TestGetNodeChildren(t *testing.T) {
+	// Test through TreeEditDistance with various node types
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "binary expression with children",
+			source: `package main
+func test() {
+	x := a + b * c
+}`,
+		},
+		{
+			name: "if statement with children",
+			source: `package main
+func test() {
+	if x > 0 {
+		return x
+	} else {
+		return 0
+	}
+}`,
+		},
+		{
+			name: "for loop with children",
+			source: `package main
+func test() {
+	for i := 0; i < 10; i++ {
+		fmt.Println(i)
+	}
+}`,
+		},
+		{
+			name: "call expression with children",
+			source: `package main
+func test() {
+	fmt.Printf("value: %d", x)
+}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fn := testhelpers.CreateFunctionFromSource(t, tt.source, "test")
+			if fn == nil {
+				t.Fatalf("Failed to create function for %s", tt.name)
+			}
+
+			// Test that TreeEditDistance can process nodes with children
+			distance := TreeEditDistance(fn.AST, fn.AST)
+			if distance != 0 {
+				t.Errorf("Expected 0 distance for identical ASTs, got %d", distance)
+			}
+		})
+	}
+}
+
+func TestTreeEditDistanceEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		node1    goast.Node
+		node2    goast.Node
+		expected int
+	}{
+		{
+			name:     "both nodes nil",
+			node1:    nil,
+			node2:    nil,
+			expected: 0,
+		},
+		{
+			name:     "first node nil",
+			node1:    nil,
+			node2:    &goast.Ident{Name: "test"},
+			expected: 1,
+		},
+		{
+			name:     "second node nil",
+			node1:    &goast.Ident{Name: "test"},
+			node2:    nil,
+			expected: 1,
+		},
+		{
+			name:     "identical simple nodes",
+			node1:    &goast.Ident{Name: "test"},
+			node2:    &goast.Ident{Name: "test"},
+			expected: 0,
+		},
+		{
+			name:     "different simple nodes",
+			node1:    &goast.Ident{Name: "test1"},
+			node2:    &goast.Ident{Name: "test2"},
+			expected: 0, // After normalization, identifiers are considered equal
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			distance := TreeEditDistance(tt.node1, tt.node2)
+			if distance != tt.expected {
+				t.Errorf("TreeEditDistance() = %d, want %d", distance, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTokenSequenceSimilarityEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		func1    *ast.Function
+		func2    *ast.Function
+		expected float64
+	}{
+		{
+			name:     "both functions nil",
+			func1:    nil,
+			func2:    nil,
+			expected: 0.0,
+		},
+		{
+			name:     "first function nil",
+			func1:    nil,
+			func2:    &ast.Function{Name: "test"},
+			expected: 0.0,
+		},
+		{
+			name:     "identical empty functions",
+			func1:    &ast.Function{Name: "test1"},
+			func2:    &ast.Function{Name: "test2"},
+			expected: 1.0, // Both produce empty token sequences
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			similarity := TokenSequenceSimilarity(tt.func1, tt.func2)
+			tolerance := 0.01
+			if testhelpers.AbsFloat(similarity-tt.expected) > tolerance {
+				t.Errorf("TokenSequenceSimilarity() = %.2f, want %.2f", similarity, tt.expected)
 			}
 		})
 	}
