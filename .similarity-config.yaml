@@ -1,5 +1,5 @@
 cli:
-  default_threshold: 0.7
+  default_threshold: 0.8
   default_min_lines: 5
   default_format: json
   default_workers: 0  # 0 means use runtime.NumCPU()

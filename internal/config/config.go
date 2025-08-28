@@ -7,6 +7,24 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Default configuration values.
+const (
+	DefaultThreshold         = 0.8
+	DefaultMinLines          = 5
+	DefaultSimilarOperations = 0.5
+	StatementCountPenalty    = 0.5
+	MinSimilarity            = 0.1
+	TreeEditWeight           = 0.3
+	TokenSimilarityWeight    = 0.3
+	StructuralWeight         = 0.25
+	SignatureWeight          = 0.15
+	DifferentSignatureWeight = 0.3
+	MaxSignatureLengthDiff   = 50
+	MaxLineDifferenceRatio   = 3.0
+	MaxCacheSize             = 10000
+	MaxEmptyVsPopulated      = 5
+)
+
 // Config represents the complete application configuration.
 type Config struct {
 	CLI        CLIConfig        `yaml:"cli"`
@@ -41,11 +59,11 @@ type SimilarityThresholds struct {
 
 // SimilarityWeights contains algorithm weights.
 type SimilarityWeights struct {
-	TreeEdit             float64 `yaml:"tree_edit"`
-	TokenSimilarity      float64 `yaml:"token_similarity"`
-	Structural           float64 `yaml:"structural"`
-	Signature            float64 `yaml:"signature"`
-	DifferentSignature   float64 `yaml:"different_signature"`
+	TreeEdit           float64 `yaml:"tree_edit"`
+	TokenSimilarity    float64 `yaml:"token_similarity"`
+	Structural         float64 `yaml:"structural"`
+	Signature          float64 `yaml:"signature"`
+	DifferentSignature float64 `yaml:"different_signature"`
 }
 
 // SimilarityLimits contains performance and quality limits.
@@ -75,33 +93,33 @@ type IgnoreConfig struct {
 func Default() *Config {
 	return &Config{
 		CLI: CLIConfig{
-			DefaultThreshold: 0.7,
-			DefaultMinLines:  5,
+			DefaultThreshold: DefaultThreshold,
+			DefaultMinLines:  DefaultMinLines,
 			DefaultFormat:    "json",
 			DefaultWorkers:   0, // 0 means use runtime.NumCPU()
 			DefaultCache:     true,
 		},
 		Similarity: SimilarityConfig{
 			Thresholds: SimilarityThresholds{
-				DefaultSimilarOperations: 0.5,
-				StatementCountPenalty:    0.5,
-				MinSimilarity:            0.1,
+				DefaultSimilarOperations: DefaultSimilarOperations,
+				StatementCountPenalty:    StatementCountPenalty,
+				MinSimilarity:            MinSimilarity,
 			},
 			Weights: SimilarityWeights{
-				TreeEdit:           0.3,
-				TokenSimilarity:    0.3,
-				Structural:         0.25,
-				Signature:          0.15,
-				DifferentSignature: 0.3,
+				TreeEdit:           TreeEditWeight,
+				TokenSimilarity:    TokenSimilarityWeight,
+				Structural:         StructuralWeight,
+				Signature:          SignatureWeight,
+				DifferentSignature: DifferentSignatureWeight,
 			},
 			Limits: SimilarityLimits{
-				MaxSignatureLengthDiff: 50,
-				MaxLineDifferenceRatio: 3.0,
-				MaxCacheSize:           10000,
+				MaxSignatureLengthDiff: MaxSignatureLengthDiff,
+				MaxLineDifferenceRatio: MaxLineDifferenceRatio,
+				MaxCacheSize:           MaxCacheSize,
 			},
 		},
 		Processing: ProcessingConfig{
-			MaxEmptyVsPopulated: 5,
+			MaxEmptyVsPopulated: MaxEmptyVsPopulated,
 		},
 		Output: OutputConfig{
 			RefactorSuggestion: "Consider extracting common logic into a shared function",
@@ -134,8 +152,8 @@ func Load(configPath string) (*Config, error) {
 			return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 		}
 
-		if err := yaml.Unmarshal(data, cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, err)
+		if unmarshalErr := yaml.Unmarshal(data, cfg); unmarshalErr != nil {
+			return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, unmarshalErr)
 		}
 	}
 
@@ -149,8 +167,8 @@ func (c *Config) Save(configPath string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
-		return fmt.Errorf("failed to write config file %s: %w", configPath, err)
+	if writeErr := os.WriteFile(configPath, data, 0o600); writeErr != nil {
+		return fmt.Errorf("failed to write config file %s: %w", configPath, writeErr)
 	}
 
 	return nil
@@ -179,7 +197,7 @@ func fileExists(path string) bool {
 	if path == "" {
 		return false
 	}
-	
+
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
 }
@@ -203,11 +221,14 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Similarity.Limits.MaxLineDifferenceRatio <= 0 {
-		return fmt.Errorf("max line difference ratio must be greater than 0, got %f", c.Similarity.Limits.MaxLineDifferenceRatio)
+		return fmt.Errorf(
+			"max line difference ratio must be greater than 0, got %f",
+			c.Similarity.Limits.MaxLineDifferenceRatio,
+		)
 	}
 
 	// Validate weights sum to reasonable values
-	totalWeight := c.Similarity.Weights.TreeEdit + c.Similarity.Weights.TokenSimilarity + 
+	totalWeight := c.Similarity.Weights.TreeEdit + c.Similarity.Weights.TokenSimilarity +
 		c.Similarity.Weights.Structural + c.Similarity.Weights.Signature
 
 	if totalWeight <= 0 {

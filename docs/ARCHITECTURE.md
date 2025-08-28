@@ -10,23 +10,23 @@ Go ASTを利用した高性能なコード類似性検証ツール。重複コ�
 graph TB
     CLI[CLI Interface] --> Scanner[File Scanner]
     CLI --> Config[Configuration Manager]
-    
+
     Scanner --> IgnoreFilter[Ignore Filter]
     Scanner --> FileWalker[Directory Walker]
-    
+
     FileWalker --> WorkerPool[Worker Pool]
     WorkerPool --> ASTParser[AST Parser]
-    
+
     ASTParser --> FunctionExtractor[Function Extractor]
     FunctionExtractor --> Normalizer[AST Normalizer]
     Normalizer --> Hasher[Structure Hasher]
-    
+
     Hasher --> Cache[Cache Manager]
     Cache --> SimilarityDetector[Similarity Detector]
-    
+
     SimilarityDetector --> Algorithm[Comparison Algorithm]
     Algorithm --> ThresholdFilter[Threshold Filter]
-    
+
     ThresholdFilter --> ResultAggregator[Result Aggregator]
     ResultAggregator --> OutputFormatter[Output Formatter]
     OutputFormatter --> JSONOutput[JSON Output]
@@ -239,7 +239,7 @@ func (sh *StructureHasher) computeHash(node ast.Node) string {
             buffer.WriteString("nil")
             return false
         }
-        
+
         switch typed := n.(type) {
         case *ast.IfStmt:
             buffer.WriteString("if")
@@ -251,7 +251,7 @@ func (sh *StructureHasher) computeHash(node ast.Node) string {
         }
         return true
     })
-    
+
     return fmt.Sprintf("%x", sha256.Sum256(buffer.Bytes()))
 }
 ```
@@ -271,7 +271,7 @@ func (sc *StructuralComparison) treeEditDistance(ast1, ast2 ast.Node) float64 {
 func (sc *StructuralComparison) tokenSimilarity(f1, f2 *Function) float64 {
     tokens1 := extractTokens(f1.AST)
     tokens2 := extractTokens(f2.AST)
-    
+
     // Jaccard係数またはコサイン類似度を計算
     return jaccardSimilarity(tokens1, tokens2)
 }
@@ -337,7 +337,7 @@ type SimilarityError struct {
 ### 設定ファイル例 (.similarity.yaml)
 
 ```yaml
-threshold: 0.7
+threshold: 0.8
 format: json
 workers: 0  # 0 = auto-detect CPU count
 cache:

@@ -339,6 +339,8 @@ func (f *Function) normalizeNode(node ast.Node) {
 					node.Name = "FUNC"
 				case ast.Typ:
 					node.Name = "TYPE"
+				case ast.Bad, ast.Pkg, ast.Lbl:
+					// Leave these types unchanged
 				}
 			} else if !f.isBuiltinIdentifier(node.Name) {
 				// Only normalize non-builtin identifiers
@@ -347,6 +349,8 @@ func (f *Function) normalizeNode(node ast.Node) {
 
 		case *ast.BasicLit:
 			// Normalize literal values to their types
+			// Only normalize basic literal tokens, leave others unchanged
+			//nolint:exhaustive // We only want to handle literal types, not all token types
 			switch node.Kind {
 			case token.INT:
 				node.Value = "0"
@@ -356,6 +360,8 @@ func (f *Function) normalizeNode(node ast.Node) {
 				node.Value = `""`
 			case token.CHAR:
 				node.Value = `'_'`
+			case token.IMAG:
+				node.Value = "0i"
 			}
 		}
 		return true
@@ -371,16 +377,16 @@ func (f *Function) isBuiltinIdentifier(name string) bool {
 		"int8": true, "int16": true, "int32": true, "int64": true,
 		"rune": true, "string": true, "uint": true, "uint8": true,
 		"uint16": true, "uint32": true, "uint64": true, "uintptr": true,
-		
+
 		// Go builtin functions
 		"append": true, "cap": true, "close": true, "complex": true,
 		"copy": true, "delete": true, "imag": true, "len": true,
 		"make": true, "new": true, "panic": true, "print": true,
 		"println": true, "real": true, "recover": true,
-		
+
 		// Go constants
 		"true": true, "false": true, "iota": true, "nil": true,
 	}
-	
+
 	return builtins[name]
 }

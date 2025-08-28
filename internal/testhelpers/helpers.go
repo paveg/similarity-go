@@ -17,14 +17,15 @@ import (
 
 // TestConfig contains configuration for test helpers.
 type TestConfig struct {
-	DefaultTolerance  float64
-	DefaultFuncName   string
+	DefaultTolerance float64
+	DefaultFuncName  string
 }
 
 // DefaultTestConfig returns the default test configuration.
 func DefaultTestConfig() *TestConfig {
+	const defaultTolerance = 0.1
 	return &TestConfig{
-		DefaultTolerance: 0.1,
+		DefaultTolerance: defaultTolerance,
 		DefaultFuncName:  "testFunc",
 	}
 }

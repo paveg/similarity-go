@@ -26,7 +26,7 @@ func add(a, b int) int {
 	return a + b
 }`,
 			expected:  1.0,
-			threshold: 0.7,
+			threshold: 0.8,
 		},
 		{
 			name: "same structure different variable names",
@@ -39,7 +39,7 @@ func add(x, y int) int {
 	return x + y
 }`,
 			expected:  1.0, // After normalization should be identical
-			threshold: 0.7,
+			threshold: 0.8,
 		},
 		{
 			name: "different functions",
@@ -52,7 +52,7 @@ func multiply(a, b int) int {
 	return a * b
 }`,
 			expected:  1.0, // Both normalized to same structure after variable renaming
-			threshold: 0.7,
+			threshold: 0.8,
 		},
 		{
 			name: "completely different functions",
@@ -69,7 +69,7 @@ func processData(data []string) map[string]int {
 	return result
 }`,
 			expected:  0.51, // Enhanced algorithm detects some token and structural similarity
-			threshold: 0.7,
+			threshold: 0.8,
 		},
 	}
 
@@ -111,19 +111,19 @@ func TestDetector_IsAboveThreshold(t *testing.T) {
 	}{
 		{
 			name:       "above threshold",
-			threshold:  0.7,
+			threshold:  0.8,
 			similarity: 0.8,
 			expected:   true,
 		},
 		{
 			name:       "equal to threshold",
-			threshold:  0.7,
-			similarity: 0.7,
+			threshold:  0.8,
+			similarity: 0.8,
 			expected:   true,
 		},
 		{
 			name:       "below threshold",
-			threshold:  0.7,
+			threshold:  0.8,
 			similarity: 0.6,
 			expected:   false,
 		},
@@ -179,7 +179,7 @@ func multiply(a, b int) int { return a * b }`, "multiply"),
 }
 
 func TestDetector_EdgeCases(t *testing.T) {
-	detector := NewDetector(0.7)
+	detector := NewDetector(0.8)
 
 	tests := []struct {
 		name     string

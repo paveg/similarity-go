@@ -7,7 +7,7 @@
 **核心的優位性**:
 
 - **10倍のパフォーマンス**: ネイティブGo実装 vs JavaScript runtime
-- **Go特化の精度**: 言語固有の最適化 vs 汎用アプローチ  
+- **Go特化の精度**: 言語固有の最適化 vs 汎用アプローチ
 - **エンタープライズ対応**: 本格的な機能セット vs 基本機能
 - **AI統合**: 次世代開発ワークフロー対応 vs 従来型出力
 
@@ -120,7 +120,7 @@ function calculateSimilarity(ast1, ast2) {
 // 多次元類似性分析
 type StructuralComparison struct {
     weightAST     float64  // 0.4 - AST構造類似性
-    weightTokens  float64  // 0.3 - トークン類似性  
+    weightTokens  float64  // 0.3 - トークン類似性
     weightFlow    float64  // 0.2 - 制御フロー類似性
     weightSignature float64 // 0.1 - 関数シグネチャ類似性
 }
@@ -130,8 +130,8 @@ func (sc *StructuralComparison) Compare(f1, f2 *Function) (float64, error) {
     tokenSim := sc.compareTokenSequence(f1, f2)   // Jaccard係数
     flowSim := sc.compareControlFlow(f1, f2)      // 制御フロー解析
     sigSim := sc.compareFunctionSignature(f1, f2) // 型シグネチャ
-    
-    return astSim*sc.weightAST + tokenSim*sc.weightTokens + 
+
+    return astSim*sc.weightAST + tokenSim*sc.weightTokens +
            flowSim*sc.weightFlow + sigSim*sc.weightSignature, nil
 }
 ```
@@ -221,7 +221,7 @@ similarity-generic --threshold 0.8 <directory>
 similarity-go [flags] <targets...>
 
 # 主要フラグ
---threshold, -t    類似度閾値 (0.0-1.0, default: 0.7)
+--threshold, -t    類似度閾値 (0.0-1.0, default: 0.8)
 --format, -f       出力形式 json|yaml (default: json)
 --workers, -w      並列処理数 (0=auto, default: CPU数)
 --cache           キャッシュ利用 (default: true)
@@ -252,7 +252,7 @@ similarity-go --verbose --output report.json --ignore .myignore ./project
   "matches": [
     {
       "file1": "src/a.go",
-      "file2": "src/b.go", 
+      "file2": "src/b.go",
       "similarity": 0.85
     }
   ]
@@ -275,7 +275,7 @@ similarity-go --verbose --output report.json --ignore .myignore ./project
     "generated_at": "2024-01-01T12:00:00Z",
     "tool": "similarity-go",
     "config": {
-      "threshold": 0.7,
+      "threshold": 0.8,
       "min_lines": 5,
       "workers": 8,
       "cache_enabled": true
@@ -334,7 +334,7 @@ similarity-go --verbose --output report.json --ignore .myignore ./project
     },
     "processing_stats": {
       "parsing_time": "0.8s",
-      "comparison_time": "1.2s", 
+      "comparison_time": "1.2s",
       "cache_hit_rate": 0.85,
       "files_per_second": 59.2
     }

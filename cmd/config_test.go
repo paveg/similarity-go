@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"testing"
+
 	"github.com/paveg/similarity-go/internal/config"
 )
 
