@@ -273,7 +273,7 @@ Centralized test utilities for:
 
 ```bash
 # Build the application
-go build -o bin/similarity-go
+make build
 
 # Run all tests with coverage
 go test -cover ./...
