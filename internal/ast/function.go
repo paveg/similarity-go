@@ -201,7 +201,7 @@ func (f *Function) deepCopyBlockStmt(original *ast.BlockStmt) *ast.BlockStmt {
 
 // deepCopyStmt creates a deep copy of a statement.
 func (f *Function) deepCopyStmt(original ast.Stmt) ast.Stmt {
-	//nolint:errcheck // deepCopyNode does not return an error
+	//nolint:errcheck // Type assertion is safe: we know the input is ast.Stmt and return ast.Stmt
 	return f.deepCopyNode(original, func(node ast.Node) ast.Node {
 		switch stmt := node.(type) {
 		case *ast.ReturnStmt:
@@ -300,7 +300,7 @@ func (f *Function) copyForStmt(stmt *ast.ForStmt) *ast.ForStmt {
 
 // deepCopyExpr creates a deep copy of an expression.
 func (f *Function) deepCopyExpr(original ast.Expr) ast.Expr {
-	//nolint:errcheck // deepCopyNode does not return an error
+	//nolint:errcheck // Type assertion is safe: we know the input is ast.Expr and return ast.Expr
 	return f.deepCopyNode(original, func(node ast.Node) ast.Node {
 		switch expr := node.(type) {
 		case *ast.Ident:
