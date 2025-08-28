@@ -201,121 +201,182 @@ func (f *Function) deepCopyBlockStmt(original *ast.BlockStmt) *ast.BlockStmt {
 
 // deepCopyStmt creates a deep copy of a statement.
 func (f *Function) deepCopyStmt(original ast.Stmt) ast.Stmt {
-	if original == nil {
-		return nil
+	//nolint:errcheck // Type assertion is safe: we know the input is ast.Stmt and return ast.Stmt
+	return f.deepCopyNode(original, func(node ast.Node) ast.Node {
+		switch stmt := node.(type) {
+		case *ast.ReturnStmt:
+			return f.copyReturnStmt(stmt)
+		case *ast.AssignStmt:
+			return f.copyAssignStmt(stmt)
+		case *ast.ExprStmt:
+			return &ast.ExprStmt{X: f.deepCopyExpr(stmt.X)}
+		case *ast.IfStmt:
+			return f.copyIfStmt(stmt)
+		case *ast.ForStmt:
+			return f.copyForStmt(stmt)
+		case *ast.BlockStmt:
+			return f.deepCopyBlockStmt(stmt)
+		default:
+			return stmt
+		}
+	}).(ast.Stmt)
+}
+
+// copyReturnStmt creates a deep copy of a return statement.
+func (f *Function) copyReturnStmt(stmt *ast.ReturnStmt) *ast.ReturnStmt {
+	copied := &ast.ReturnStmt{
+		Return:  stmt.Return,
+		Results: make([]ast.Expr, len(stmt.Results)),
+	}
+	for i, result := range stmt.Results {
+		copied.Results[i] = f.deepCopyExpr(result)
+	}
+	return copied
+}
+
+// copyAssignStmt creates a deep copy of an assignment statement.
+func (f *Function) copyAssignStmt(stmt *ast.AssignStmt) *ast.AssignStmt {
+	copied := &ast.AssignStmt{
+		Lhs:    make([]ast.Expr, len(stmt.Lhs)),
+		TokPos: stmt.TokPos,
+		Tok:    stmt.Tok,
+		Rhs:    make([]ast.Expr, len(stmt.Rhs)),
+	}
+	for i, lhs := range stmt.Lhs {
+		copied.Lhs[i] = f.deepCopyExpr(lhs)
+	}
+	for i, rhs := range stmt.Rhs {
+		copied.Rhs[i] = f.deepCopyExpr(rhs)
+	}
+	return copied
+}
+
+// copyIfStmt creates a deep copy of an if statement.
+func (f *Function) copyIfStmt(stmt *ast.IfStmt) *ast.IfStmt {
+	var initStmt ast.Stmt
+	if stmt.Init != nil {
+		initStmt = f.deepCopyStmt(stmt.Init)
 	}
 
-	switch stmt := original.(type) {
-	case *ast.ReturnStmt:
-		copied := &ast.ReturnStmt{
-			Return:  stmt.Return,
-			Results: make([]ast.Expr, len(stmt.Results)),
-		}
-		for i, result := range stmt.Results {
-			copied.Results[i] = f.deepCopyExpr(result)
-		}
-		return copied
+	var elseStmt ast.Stmt
+	if stmt.Else != nil {
+		elseStmt = f.deepCopyStmt(stmt.Else)
+	}
 
-	case *ast.AssignStmt:
-		copied := &ast.AssignStmt{
-			Lhs:    make([]ast.Expr, len(stmt.Lhs)),
-			TokPos: stmt.TokPos,
-			Tok:    stmt.Tok,
-			Rhs:    make([]ast.Expr, len(stmt.Rhs)),
-		}
-		for i, lhs := range stmt.Lhs {
-			copied.Lhs[i] = f.deepCopyExpr(lhs)
-		}
-		for i, rhs := range stmt.Rhs {
-			copied.Rhs[i] = f.deepCopyExpr(rhs)
-		}
-		return copied
+	return &ast.IfStmt{
+		If:   stmt.If,
+		Init: initStmt,
+		Cond: f.deepCopyExpr(stmt.Cond),
+		Body: f.deepCopyBlockStmt(stmt.Body),
+		Else: elseStmt,
+	}
+}
 
-	case *ast.ExprStmt:
-		return &ast.ExprStmt{
-			X: f.deepCopyExpr(stmt.X),
-		}
+// copyForStmt creates a deep copy of a for statement.
+func (f *Function) copyForStmt(stmt *ast.ForStmt) *ast.ForStmt {
+	var initStmt ast.Stmt
+	if stmt.Init != nil {
+		initStmt = f.deepCopyStmt(stmt.Init)
+	}
 
-	case *ast.IfStmt:
-		return &ast.IfStmt{
-			If:   stmt.If,
-			Init: f.deepCopyStmt(stmt.Init),
-			Cond: f.deepCopyExpr(stmt.Cond),
-			Body: f.deepCopyBlockStmt(stmt.Body),
-			Else: f.deepCopyStmt(stmt.Else),
-		}
+	var condExpr ast.Expr
+	if stmt.Cond != nil {
+		condExpr = f.deepCopyExpr(stmt.Cond)
+	}
 
-	case *ast.ForStmt:
-		return &ast.ForStmt{
-			For:  stmt.For,
-			Init: f.deepCopyStmt(stmt.Init),
-			Cond: f.deepCopyExpr(stmt.Cond),
-			Post: f.deepCopyStmt(stmt.Post),
-			Body: f.deepCopyBlockStmt(stmt.Body),
-		}
+	var postStmt ast.Stmt
+	if stmt.Post != nil {
+		postStmt = f.deepCopyStmt(stmt.Post)
+	}
 
-	case *ast.BlockStmt:
-		return f.deepCopyBlockStmt(stmt)
-
-	default:
-		// For other statement types, return as-is for now
-		return stmt
+	return &ast.ForStmt{
+		For:  stmt.For,
+		Init: initStmt,
+		Cond: condExpr,
+		Post: postStmt,
+		Body: f.deepCopyBlockStmt(stmt.Body),
 	}
 }
 
 // deepCopyExpr creates a deep copy of an expression.
 func (f *Function) deepCopyExpr(original ast.Expr) ast.Expr {
+	//nolint:errcheck // Type assertion is safe: we know the input is ast.Expr and return ast.Expr
+	return f.deepCopyNode(original, func(node ast.Node) ast.Node {
+		switch expr := node.(type) {
+		case *ast.Ident:
+			return f.copyIdent(expr)
+		case *ast.BasicLit:
+			return f.copyBasicLit(expr)
+		case *ast.BinaryExpr:
+			return f.copyBinaryExpr(expr)
+		case *ast.UnaryExpr:
+			return f.copyUnaryExpr(expr)
+		case *ast.CallExpr:
+			return f.copyCallExpr(expr)
+		default:
+			return expr
+		}
+	}).(ast.Expr)
+}
+
+// deepCopyNode provides common nil-check and type conversion pattern for copying AST nodes.
+func (f *Function) deepCopyNode(original ast.Node, copyFunc func(ast.Node) ast.Node) ast.Node {
 	if original == nil {
 		return nil
 	}
+	return copyFunc(original)
+}
 
-	switch expr := original.(type) {
-	case *ast.Ident:
-		return &ast.Ident{
-			NamePos: expr.NamePos,
-			Name:    expr.Name,
-			Obj:     expr.Obj,
-		}
-
-	case *ast.BasicLit:
-		return &ast.BasicLit{
-			ValuePos: expr.ValuePos,
-			Kind:     expr.Kind,
-			Value:    expr.Value,
-		}
-
-	case *ast.BinaryExpr:
-		return &ast.BinaryExpr{
-			X:     f.deepCopyExpr(expr.X),
-			OpPos: expr.OpPos,
-			Op:    expr.Op,
-			Y:     f.deepCopyExpr(expr.Y),
-		}
-
-	case *ast.UnaryExpr:
-		return &ast.UnaryExpr{
-			OpPos: expr.OpPos,
-			Op:    expr.Op,
-			X:     f.deepCopyExpr(expr.X),
-		}
-
-	case *ast.CallExpr:
-		copied := &ast.CallExpr{
-			Fun:      f.deepCopyExpr(expr.Fun),
-			Lparen:   expr.Lparen,
-			Args:     make([]ast.Expr, len(expr.Args)),
-			Ellipsis: expr.Ellipsis,
-			Rparen:   expr.Rparen,
-		}
-		for i, arg := range expr.Args {
-			copied.Args[i] = f.deepCopyExpr(arg)
-		}
-		return copied
-
-	default:
-		// For other expression types, return as-is for now
-		return expr
+// copyIdent creates a deep copy of an identifier.
+func (f *Function) copyIdent(expr *ast.Ident) *ast.Ident {
+	return &ast.Ident{
+		NamePos: expr.NamePos,
+		Name:    expr.Name,
+		Obj:     expr.Obj,
 	}
+}
+
+// copyBasicLit creates a deep copy of a basic literal.
+func (f *Function) copyBasicLit(expr *ast.BasicLit) *ast.BasicLit {
+	return &ast.BasicLit{
+		ValuePos: expr.ValuePos,
+		Kind:     expr.Kind,
+		Value:    expr.Value,
+	}
+}
+
+// copyBinaryExpr creates a deep copy of a binary expression.
+func (f *Function) copyBinaryExpr(expr *ast.BinaryExpr) *ast.BinaryExpr {
+	return &ast.BinaryExpr{
+		X:     f.deepCopyExpr(expr.X),
+		OpPos: expr.OpPos,
+		Op:    expr.Op,
+		Y:     f.deepCopyExpr(expr.Y),
+	}
+}
+
+// copyUnaryExpr creates a deep copy of a unary expression.
+func (f *Function) copyUnaryExpr(expr *ast.UnaryExpr) *ast.UnaryExpr {
+	return &ast.UnaryExpr{
+		OpPos: expr.OpPos,
+		Op:    expr.Op,
+		X:     f.deepCopyExpr(expr.X),
+	}
+}
+
+// copyCallExpr creates a deep copy of a call expression.
+func (f *Function) copyCallExpr(expr *ast.CallExpr) *ast.CallExpr {
+	copied := &ast.CallExpr{
+		Fun:      f.deepCopyExpr(expr.Fun),
+		Lparen:   expr.Lparen,
+		Args:     make([]ast.Expr, len(expr.Args)),
+		Ellipsis: expr.Ellipsis,
+		Rparen:   expr.Rparen,
+	}
+	for i, arg := range expr.Args {
+		copied.Args[i] = f.deepCopyExpr(arg)
+	}
+	return copied
 }
 
 // normalizeNode recursively normalizes AST nodes by replacing variable names
