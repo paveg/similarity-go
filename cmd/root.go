@@ -103,15 +103,44 @@ func applyFlagOverrides(cfg *config.Config, cmd *cobra.Command) error {
 }
 
 func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) error {
+	// Load and validate configuration
+	cfg, err := loadAndConfigureSetup(args, cmd, targets)
+	if err != nil {
+		return err
+	}
+
+	// Initialize parser and detector
+	parser := ast.NewParser()
+	detector := similarity.NewDetectorWithConfig(cfg.CLI.DefaultThreshold, cfg)
+
+	// Parse all target files
+	allFunctions := parseAllTargets(parser, targets, cfg, args.verbose)
+
+	if args.verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Found %d functions for analysis\n", len(allFunctions))
+	}
+
+	// Find similar functions
+	similarMatches, err := findSimilarFunctions(cfg, detector, allFunctions, args.verbose)
+	if err != nil {
+		return err
+	}
+
+	// Generate and output results
+	return generateAndOutputResults(allFunctions, similarMatches, cfg, args.output)
+}
+
+// loadAndConfigureSetup loads configuration and logs setup information.
+func loadAndConfigureSetup(args *CLIArgs, cmd *cobra.Command, targets []string) (*config.Config, error) {
 	// Load configuration
 	cfg, err := config.Load(args.configFile)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	// Apply flag overrides
 	if overrideErr := applyFlagOverrides(cfg, cmd); overrideErr != nil {
-		return fmt.Errorf("invalid configuration: %w", overrideErr)
+		return nil, fmt.Errorf("invalid configuration: %w", overrideErr)
 	}
 
 	if args.verbose {
@@ -126,59 +155,78 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 		)
 	}
 
-	// Initialize parser and detector
-	parser := ast.NewParser()
-	detector := similarity.NewDetectorWithConfig(cfg.CLI.DefaultThreshold, cfg)
+	return cfg, nil
+}
 
-	// Parse all target files
-	allFunctions := parseAllTargets(parser, targets, cfg, args.verbose)
-
-	if args.verbose {
-		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Found %d functions for analysis\n", len(allFunctions))
+// findSimilarFunctions finds similar functions using appropriate processing method.
+func findSimilarFunctions(
+	cfg *config.Config,
+	detector *similarity.Detector,
+	allFunctions []*ast.Function,
+	verbose bool,
+) ([]similarity.Match, error) {
+	if cfg.CLI.DefaultWorkers > 1 {
+		return findSimilarFunctionsParallel(cfg, detector, allFunctions, verbose)
 	}
 
-	// Find similar functions (use parallel processing if workers > 1)
-	var similarMatches []similarity.Match
+	// Use serial processing
+	if verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using serial processing\n")
+	}
+	return detector.FindSimilarFunctions(allFunctions), nil
+}
 
-	if cfg.CLI.DefaultWorkers > 1 {
-		// Use parallel processing
-		if args.verbose {
-			_, _ = fmt.Fprintf(
-				os.Stderr,
-				"[similarity-go] Using parallel processing with %d workers\n",
-				cfg.CLI.DefaultWorkers,
-			)
-		}
+// findSimilarFunctionsParallel finds similar functions using parallel processing.
+func findSimilarFunctionsParallel(
+	cfg *config.Config,
+	detector *similarity.Detector,
+	allFunctions []*ast.Function,
+	verbose bool,
+) ([]similarity.Match, error) {
+	if verbose {
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			"[similarity-go] Using parallel processing with %d workers\n",
+			cfg.CLI.DefaultWorkers,
+		)
+	}
 
-		// Create progress callback for verbose mode
-		var progressCallback func(completed, total int)
-		if args.verbose {
-			progressCallback = func(completed, total int) {
-				if completed%ProgressReportingInterval == 0 || completed == total {
-					_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)",
-						completed, total, float64(completed)/float64(total)*PercentageMultiplier)
-					if completed == total {
-						_, _ = fmt.Fprintf(os.Stderr, "\n")
-					}
-				}
+	// Create progress callback for verbose mode
+	var progressCallback func(completed, total int)
+	if verbose {
+		progressCallback = createProgressCallback()
+	}
+
+	// Use worker for parallel processing
+	parallelWorker := worker.NewSimilarityWorker(detector, cfg.CLI.DefaultWorkers, cfg.CLI.DefaultThreshold)
+	similarMatches, parallelErr := parallelWorker.FindSimilarFunctions(allFunctions, progressCallback)
+	if parallelErr != nil {
+		return nil, fmt.Errorf("parallel similarity calculation failed: %w", parallelErr)
+	}
+
+	return similarMatches, nil
+}
+
+// createProgressCallback creates a progress callback function for verbose output.
+func createProgressCallback() func(completed, total int) {
+	return func(completed, total int) {
+		if completed%ProgressReportingInterval == 0 || completed == total {
+			_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)",
+				completed, total, float64(completed)/float64(total)*PercentageMultiplier)
+			if completed == total {
+				_, _ = fmt.Fprintf(os.Stderr, "\n")
 			}
 		}
-
-		// Use worker for parallel processing
-		parallelWorker := worker.NewSimilarityWorker(detector, cfg.CLI.DefaultWorkers, cfg.CLI.DefaultThreshold)
-		var parallelErr error
-		similarMatches, parallelErr = parallelWorker.FindSimilarFunctions(allFunctions, progressCallback)
-		if parallelErr != nil {
-			return fmt.Errorf("parallel similarity calculation failed: %w", parallelErr)
-		}
-	} else {
-		// Use serial processing
-		if args.verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using serial processing\n")
-		}
-		similarMatches = detector.FindSimilarFunctions(allFunctions)
 	}
+}
 
+// generateAndOutputResults generates output data and writes it.
+func generateAndOutputResults(
+	allFunctions []*ast.Function,
+	similarMatches []similarity.Match,
+	cfg *config.Config,
+	outputPath string,
+) error {
 	// Group similar matches for better output formatting
 	similarGroups := groupSimilarMatches(similarMatches)
 
@@ -193,7 +241,7 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 	}
 
 	// Output results
-	return writeOutput(output, cfg.CLI.DefaultFormat, args.output)
+	return writeOutput(output, cfg.CLI.DefaultFormat, outputPath)
 }
 
 // writeOutput writes the given output in the specified format to the given output path.

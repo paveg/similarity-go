@@ -191,48 +191,66 @@ func TestSimilarityWorkerConcurrency(t *testing.T) {
 	}
 
 	// Create many test functions for meaningful parallelization
-	functions := make([]*ast.Function, 20)
-	for i := range 20 {
+	functions := createTestFunctionSet(20)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runConcurrencyTest(t, detector, functions, tt.workers)
+		})
+	}
+}
+
+// createTestFunctionSet creates a set of test functions for concurrency testing.
+func createTestFunctionSet(count int) []*ast.Function {
+	functions := make([]*ast.Function, count)
+	for i := range count {
 		functions[i] = createTestFunction(
 			"func"+string(rune('A'+i%26)),
 			"return "+string(rune('0'+i%10)),
 		)
 	}
+	return functions
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			worker := NewSimilarityWorker(detector, tt.workers, 0.1)
+// runConcurrencyTest runs the concurrency test for the given parameters.
+func runConcurrencyTest(t *testing.T, detector *similarity.Detector, functions []*ast.Function, workers int) {
+	worker := NewSimilarityWorker(detector, workers, 0.1)
 
-			matches, err := worker.FindSimilarFunctions(functions, nil)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+	matches, err := worker.FindSimilarFunctions(functions, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-			// Verify all matches are valid
-			for _, match := range matches {
-				if match.Function1 == nil || match.Function2 == nil {
-					t.Error("match contains nil function")
-				}
+	validateMatches(t, matches)
+	verifyNoDuplicateMatches(t, matches)
+}
 
-				if match.Similarity < 0 || match.Similarity > 1 {
-					t.Errorf("invalid similarity score: %f", match.Similarity)
-				}
-			}
+// validateMatches verifies that all matches are valid.
+func validateMatches(t *testing.T, matches []similarity.Match) {
+	for _, match := range matches {
+		if match.Function1 == nil || match.Function2 == nil {
+			t.Error("match contains nil function")
+		}
 
-			// Verify no duplicate matches
-			seen := make(map[string]bool)
-			for _, match := range matches {
-				key1 := match.Function1.Name + "-" + match.Function2.Name
-				key2 := match.Function2.Name + "-" + match.Function1.Name
+		if match.Similarity < 0 || match.Similarity > 1 {
+			t.Errorf("invalid similarity score: %f", match.Similarity)
+		}
+	}
+}
 
-				if seen[key1] || seen[key2] {
-					t.Errorf("duplicate match found: %s", key1)
-				}
+// verifyNoDuplicateMatches ensures no duplicate matches exist.
+func verifyNoDuplicateMatches(t *testing.T, matches []similarity.Match) {
+	seen := make(map[string]bool)
+	for _, match := range matches {
+		key1 := match.Function1.Name + "-" + match.Function2.Name
+		key2 := match.Function2.Name + "-" + match.Function1.Name
 
-				seen[key1] = true
-				seen[key2] = true
-			}
-		})
+		if seen[key1] || seen[key2] {
+			t.Errorf("duplicate match found: %s", key1)
+		}
+
+		seen[key1] = true
+		seen[key2] = true
 	}
 }
 
