@@ -8,6 +8,7 @@ import (
 	goast "go/ast"
 	"go/format"
 	"go/token"
+	"sync"
 
 	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/config"
@@ -19,6 +20,7 @@ type Detector struct {
 	threshold       float64
 	config          *config.Config
 	similarityCache map[string]float64 // Cache for similarity results
+	cacheMu         sync.RWMutex       // Mutex for thread-safe cache access
 }
 
 // Match represents a match between two similar functions.
@@ -63,16 +65,21 @@ func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 
 	// Check cache for previously calculated similarity
 	cacheKey := d.getCacheKey(hash1, hash2)
+	d.cacheMu.RLock()
 	if cached, exists := d.similarityCache[cacheKey]; exists {
+		d.cacheMu.RUnlock()
 		return cached
 	}
+	d.cacheMu.RUnlock()
 
 	// Early termination: quick signature-based filtering
 	if !d.couldBeSimilar(func1, func2) {
 		// Cache the result (with size limit)
+		d.cacheMu.Lock()
 		if len(d.similarityCache) < d.config.Similarity.Limits.MaxCacheSize {
 			d.similarityCache[cacheKey] = 0.0
 		}
+		d.cacheMu.Unlock()
 		return 0.0 // Functions are too different to be similar
 	}
 
@@ -100,9 +107,11 @@ func (d *Detector) CalculateSimilarity(func1, func2 *ast.Function) float64 {
 	result := weights.TreeEdit*treeEditSim + weights.TokenSimilarity*tokenSim + weights.Structural*structuralSim + weights.Signature*signatureSim
 
 	// Cache the result for future use (with size limit)
+	d.cacheMu.Lock()
 	if len(d.similarityCache) < d.config.Similarity.Limits.MaxCacheSize {
 		d.similarityCache[cacheKey] = result
 	}
+	d.cacheMu.Unlock()
 
 	return result
 }
@@ -130,6 +139,20 @@ func (d *Detector) FindSimilarFunctions(functions []*ast.Function) []Match {
 	}
 
 	return matches
+}
+
+// ParallelProcessor defines the interface for parallel similarity processing.
+type ParallelProcessor interface {
+	FindSimilarFunctions(functions []*ast.Function, progressCallback func(completed, total int)) ([]Match, error)
+}
+
+// FindSimilarFunctionsWithProcessor finds similar functions using a provided parallel processor.
+func (d *Detector) FindSimilarFunctionsWithProcessor(
+	processor ParallelProcessor,
+	functions []*ast.Function,
+	progressCallback func(completed, total int),
+) ([]Match, error) {
+	return processor.FindSimilarFunctions(functions, progressCallback)
 }
 
 // couldBeSimilar performs quick heuristic checks to filter out obviously dissimilar functions.

@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
+	"sync"
 )
 
 // Function represents a Go function with its metadata and AST representation.
@@ -21,31 +22,45 @@ type Function struct {
 	hash       string        // Cached structure hash
 	signature  string        // Cached function signature
 	LineCount  int           // Number of lines in the function
+	mu         sync.RWMutex  // Protects cached fields (hash, signature)
 }
 
 // GetSignature returns the function signature as a string.
 // The signature is cached after first computation.
 func (f *Function) GetSignature() string {
+	f.mu.RLock()
+	if f.signature != "" {
+		sig := f.signature
+		f.mu.RUnlock()
+		return sig
+	}
+	f.mu.RUnlock()
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	// Double-check after acquiring write lock
 	if f.signature != "" {
 		return f.signature
 	}
 
-	if f.AST == nil || f.AST.Type == nil {
-		f.signature = "func()"
+	f.signature = f.computeSignature()
+	return f.signature
+}
 
-		return f.signature
+// computeSignature computes the function signature without locking.
+// Should only be called when holding the write lock.
+func (f *Function) computeSignature() string {
+	if f.AST == nil || f.AST.Type == nil {
+		return "func()"
 	}
 
 	var buf bytes.Buffer
 	if err := format.Node(&buf, token.NewFileSet(), f.AST.Type); err != nil {
-		f.signature = "func()"
-
-		return f.signature
+		return "func()"
 	}
 
-	f.signature = buf.String()
-
-	return f.signature
+	return buf.String()
 }
 
 // GetSource returns the complete source code of the function.
@@ -82,15 +97,32 @@ func (f *Function) IsValid(minLines int) bool {
 
 // Hash returns a structural hash of the function for quick comparison.
 func (f *Function) Hash() string {
+	f.mu.RLock()
+	if f.hash != "" {
+		h := f.hash
+		f.mu.RUnlock()
+		return h
+	}
+	f.mu.RUnlock()
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	// Double-check after acquiring write lock
 	if f.hash != "" {
 		return f.hash
+	}
+
+	// Ensure signature is computed first
+	if f.signature == "" {
+		f.signature = f.computeSignature()
 	}
 
 	if f.AST == nil {
 		// Include function name in hash even for nil AST
 		hashComponents := []string{
 			f.Name,
-			f.GetSignature(),
+			f.signature,
 			fmt.Sprintf("lines:%d-%d", f.StartLine, f.EndLine),
 			fmt.Sprintf("count:%d", f.LineCount),
 			"nil_ast",
@@ -107,7 +139,7 @@ func (f *Function) Hash() string {
 	// Create a structural hash based on function signature and basic structure
 	hashComponents := []string{
 		f.Name,
-		f.GetSignature(),
+		f.signature,
 		fmt.Sprintf("lines:%d-%d", f.StartLine, f.EndLine),
 		fmt.Sprintf("count:%d", f.LineCount),
 	}

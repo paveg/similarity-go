@@ -14,7 +14,15 @@ import (
 	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/similarity"
+	"github.com/paveg/similarity-go/internal/worker"
 	"github.com/paveg/similarity-go/pkg/mathutil"
+)
+
+const (
+	// PercentageMultiplier is used to convert decimal to percentage.
+	PercentageMultiplier = 100
+	// ProgressReportingInterval defines how often progress is reported.
+	ProgressReportingInterval = 100
 )
 
 var (
@@ -95,27 +103,10 @@ func applyFlagOverrides(cfg *config.Config, cmd *cobra.Command) error {
 }
 
 func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) error {
-	// Load configuration
-	cfg, err := config.Load(args.configFile)
+	// Load and validate configuration
+	cfg, err := loadAndConfigureSetup(args, cmd, targets)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	// Apply flag overrides
-	if overrideErr := applyFlagOverrides(cfg, cmd); overrideErr != nil {
-		return fmt.Errorf("invalid configuration: %w", overrideErr)
-	}
-
-	if args.verbose {
-		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Running similarity analysis on targets: %v\n", targets)
-		_, _ = fmt.Fprintf(
-			os.Stderr,
-			"[similarity-go] Configuration - Threshold: %.2f, Format: %s, Workers: %d, Cache: %v\n",
-			cfg.CLI.DefaultThreshold,
-			cfg.CLI.DefaultFormat,
-			cfg.CLI.DefaultWorkers,
-			cfg.CLI.DefaultCache,
-		)
+		return err
 	}
 
 	// Initialize parser and detector
@@ -130,14 +121,118 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 	}
 
 	// Find similar functions
-	similarMatches := detector.FindSimilarFunctions(allFunctions)
+	similarMatches, err := findSimilarFunctions(cfg, detector, allFunctions, args.verbose)
+	if err != nil {
+		return err
+	}
 
+	// Generate and output results
+	return generateAndOutputResults(allFunctions, similarMatches, cfg, args.output)
+}
+
+// loadAndConfigureSetup loads configuration and logs setup information.
+func loadAndConfigureSetup(args *CLIArgs, cmd *cobra.Command, targets []string) (*config.Config, error) {
+	// Load configuration
+	cfg, err := config.Load(args.configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Apply flag overrides
+	if overrideErr := applyFlagOverrides(cfg, cmd); overrideErr != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", overrideErr)
+	}
+
+	if args.verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Running similarity analysis on targets: %v\n", targets)
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			"[similarity-go] Configuration - Threshold: %.2f, Format: %s, Workers: %d, Cache: %v\n",
+			cfg.CLI.DefaultThreshold,
+			cfg.CLI.DefaultFormat,
+			cfg.CLI.DefaultWorkers,
+			cfg.CLI.DefaultCache,
+		)
+	}
+
+	return cfg, nil
+}
+
+// findSimilarFunctions finds similar functions using appropriate processing method.
+func findSimilarFunctions(
+	cfg *config.Config,
+	detector *similarity.Detector,
+	allFunctions []*ast.Function,
+	verbose bool,
+) ([]similarity.Match, error) {
+	if cfg.CLI.DefaultWorkers > 1 {
+		return findSimilarFunctionsParallel(cfg, detector, allFunctions, verbose)
+	}
+
+	// Use serial processing
+	if verbose {
+		_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using serial processing\n")
+	}
+	return detector.FindSimilarFunctions(allFunctions), nil
+}
+
+// findSimilarFunctionsParallel finds similar functions using parallel processing.
+func findSimilarFunctionsParallel(
+	cfg *config.Config,
+	detector *similarity.Detector,
+	allFunctions []*ast.Function,
+	verbose bool,
+) ([]similarity.Match, error) {
+	if verbose {
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			"[similarity-go] Using parallel processing with %d workers\n",
+			cfg.CLI.DefaultWorkers,
+		)
+	}
+
+	// Create progress callback for verbose mode
+	var progressCallback func(completed, total int)
+	if verbose {
+		progressCallback = createProgressCallback()
+	}
+
+	// Use worker for parallel processing
+	parallelWorker := worker.NewSimilarityWorker(detector, cfg.CLI.DefaultWorkers, cfg.CLI.DefaultThreshold)
+	similarMatches, parallelErr := parallelWorker.FindSimilarFunctions(allFunctions, progressCallback)
+	if parallelErr != nil {
+		return nil, fmt.Errorf("parallel similarity calculation failed: %w", parallelErr)
+	}
+
+	return similarMatches, nil
+}
+
+// createProgressCallback creates a progress callback function for verbose output.
+func createProgressCallback() func(completed, total int) {
+	return func(completed, total int) {
+		if completed%ProgressReportingInterval == 0 || completed == total {
+			_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)",
+				completed, total, float64(completed)/float64(total)*PercentageMultiplier)
+			if completed == total {
+				_, _ = fmt.Fprintf(os.Stderr, "\n")
+			}
+		}
+	}
+}
+
+// generateAndOutputResults generates output data and writes it.
+func generateAndOutputResults(
+	allFunctions []*ast.Function,
+	similarMatches []similarity.Match,
+	cfg *config.Config,
+	outputPath string,
+) error {
 	// Group similar matches for better output formatting
 	similarGroups := groupSimilarMatches(similarMatches)
 
 	// Prepare output
-	output := map[string]interface{}{
-		"summary": map[string]interface{}{
+	output := map[string]any{
+		"summary": map[string]any{
 			"total_functions":    len(allFunctions),
 			"similar_groups":     len(similarGroups),
 			"total_duplications": countDuplications(similarGroups),
@@ -146,11 +241,11 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 	}
 
 	// Output results
-	return writeOutput(output, cfg.CLI.DefaultFormat, args.output)
+	return writeOutput(output, cfg.CLI.DefaultFormat, outputPath)
 }
 
 // writeOutput writes the given output in the specified format to the given output path.
-func writeOutput(output map[string]interface{}, format, outputPath string) error {
+func writeOutput(output map[string]any, format, outputPath string) error {
 	outputWriter := os.Stdout
 	if outputPath != "" {
 		file, createErr := os.Create(outputPath)
@@ -337,8 +432,8 @@ func countDuplications(groups [][]similarity.Match) int {
 }
 
 // formatSimilarGroups formats similarity groups for output.
-func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[string]interface{} {
-	var result []map[string]interface{}
+func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[string]any {
+	var result []map[string]any
 
 	for i, group := range groups {
 		if len(group) == 0 {
@@ -348,7 +443,7 @@ func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[
 		// For now, each group contains one match (pair of similar functions)
 		match := group[0]
 
-		functions := []map[string]interface{}{
+		functions := []map[string]any{
 			{
 				"file":       match.Function1.File,
 				"function":   match.Function1.Name,
@@ -365,7 +460,7 @@ func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[
 			},
 		}
 
-		groupData := map[string]interface{}{
+		groupData := map[string]any{
 			"id":                  fmt.Sprintf("group_%d", i+1),
 			"similarity_score":    match.Similarity,
 			"functions":           functions,
