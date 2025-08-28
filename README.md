@@ -3,6 +3,7 @@
 [![CI](https://github.com/paveg/similarity-go/workflows/CI/badge.svg)](https://github.com/paveg/similarity-go/actions)
 [![codecov](https://codecov.io/gh/paveg/similarity-go/graph/badge.svg?token=IM08X5VLQX)](https://codecov.io/gh/paveg/similarity-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/paveg/similarity-go)](https://goreportcard.com/report/github.com/paveg/similarity-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/paveg/similarity-go.svg)](https://pkg.go.dev/github.com/paveg/similarity-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A high-performance Go code similarity detection CLI tool that uses multi-factor AST analysis to find duplicate and similar code patterns with advanced similarity detection algorithms.
@@ -22,22 +23,39 @@ A high-performance Go code similarity detection CLI tool that uses multi-factor 
 
 ## Installation
 
+### Using Go Install (Recommended)
+
+```bash
+go install github.com/paveg/similarity-go/cmd/similarity-go@latest
+```
+
+This will install the binary to your `$GOPATH/bin` or `$GOBIN` directory.
+
+### Using Homebrew (macOS/Linux)
+
+```bash
+brew tap paveg/tap
+brew install similarity-go
+```
+
+### Download Binary
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/paveg/similarity-go/releases/latest).
+
 ### From Source
 
 ```bash
 git clone https://github.com/paveg/similarity-go.git
 cd similarity-go
-go build -o bin/similarity-go
+make build        # Build for current platform
 ```
 
 The binary will be available as `bin/similarity-go`.
 
-### Using Make
+### Docker
 
 ```bash
-make build        # Build for current platform
-make build-all    # Cross-compile for all platforms
-make install      # Install to $GOPATH/bin
+docker run --rm -v $(pwd):/workspace paveg/similarity-go --threshold 0.8 /workspace
 ```
 
 ## Usage
