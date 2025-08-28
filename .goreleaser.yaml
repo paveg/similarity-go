@@ -1,0 +1,195 @@
+project_name: similarity-go
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: similarity-go
+    binary: similarity-go
+    main: ./cmd/similarity-go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - docs/**/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^refactor:"
+      - "^style:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: 'Other Changes'
+      order: 999
+
+brews:
+  - repository:
+      owner: paveg
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    goarm: 6
+    homepage: https://github.com/paveg/similarity-go
+    description: High-performance Go code similarity detection CLI tool using multi-factor AST analysis
+    license: MIT
+    test: |
+      system "#{bin}/similarity-go --version"
+    dependencies:
+      - name: go
+        type: optional
+
+nfpms:
+  - file_name_template: '{{ .ConventionalFileName }}'
+    id: packages
+    homepage: https://github.com/paveg/similarity-go
+    description: High-performance Go code similarity detection CLI tool
+    maintainer: paveg <paveg@example.com>
+    license: MIT
+    vendor: paveg
+    bindir: /usr/local/bin
+    section: utils
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/similarity-go/copyright
+        file_info:
+          mode: 0644
+      - src: ./README.md
+        dst: /usr/share/doc/similarity-go/README.md
+        file_info:
+          mode: 0644
+    formats:
+      - apk
+      - deb
+      - rpm
+      - termux.deb
+      - archlinux
+
+publishers:
+  - name: fury.io
+    ids:
+      - packages
+    dir: "{{ dir .ArtifactPath }}"
+    cmd: curl -F package=@{{ .ArtifactName }} https://{{ .Env.FURY_TOKEN }}@push.fury.io/paveg/
+
+dockers:
+  - image_templates:
+      - "paveg/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "paveg/{{ .ProjectName }}:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url=https://github.com/paveg/{{ .ProjectName }}
+      - --label=org.opencontainers.image.source=https://github.com/paveg/{{ .ProjectName }}
+      - --label=org.opencontainers.image.version={{ .Version }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+      - --label=org.opencontainers.image.licenses=MIT
+  - image_templates:
+      - "paveg/{{ .ProjectName }}:{{ .Version }}-arm64v8"
+      - "paveg/{{ .ProjectName }}:latest-arm64v8"
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm64/v8
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url=https://github.com/paveg/{{ .ProjectName }}
+      - --label=org.opencontainers.image.source=https://github.com/paveg/{{ .ProjectName }}
+      - --label=org.opencontainers.image.version={{ .Version }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+      - --label=org.opencontainers.image.licenses=MIT
+
+docker_manifests:
+  - name_template: paveg/{{ .ProjectName }}:{{ .Version }}
+    image_templates:
+      - paveg/{{ .ProjectName }}:{{ .Version }}-amd64
+      - paveg/{{ .ProjectName }}:{{ .Version }}-arm64v8
+  - name_template: paveg/{{ .ProjectName }}:latest
+    image_templates:
+      - paveg/{{ .ProjectName }}:latest-amd64
+      - paveg/{{ .ProjectName }}:latest-arm64v8
+
+release:
+  prerelease: auto
+  mode: append
+  header: |
+    ## similarity-go {{ .Tag }} ({{ .Date }})
+    
+    A high-performance Go code similarity detection CLI tool that uses multi-factor AST analysis.
+    
+  footer: |
+    ## Installation
+    
+    ### Using Go Install
+    ```bash
+    go install github.com/paveg/similarity-go/cmd/similarity-go@{{ .Tag }}
+    ```
+    
+    ### Using Homebrew
+    ```bash
+    brew tap paveg/tap
+    brew install similarity-go
+    ```
+    
+    ### Download Binary
+    Download the appropriate binary for your platform from the assets below.
+    
+    ---
+    
+    **Full Changelog**: https://github.com/paveg/similarity-go/compare/{{ .PreviousTag }}...{{ .Tag }}

@@ -1,9 +1,9 @@
 # Go Code Similarity Detection Tool - Makefile
 
 # Variables
-GO_VERSION := 1.24.5
+GO_VERSION := 1.25.0
 BINARY_NAME := similarity-go
-MAIN_PATH := ./cmd
+MAIN_PATH := ./cmd/similarity-go
 COVERAGE_OUT := coverage.out
 COVERAGE_HTML := coverage.html
 BIN_DIR := bin
