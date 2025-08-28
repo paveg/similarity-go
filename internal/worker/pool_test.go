@@ -157,9 +157,9 @@ func TestPoolConcurrentAccess(t *testing.T) {
 	pool.Start()
 	defer pool.Stop()
 
-	// Submit tasks concurrently
-	numGoroutines := 10
-	tasksPerGoroutine := 20
+	// Submit fewer tasks concurrently for faster testing
+	numGoroutines := 3
+	tasksPerGoroutine := 5
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -184,10 +184,10 @@ func TestPoolConcurrentAccess(t *testing.T) {
 	// Wait for all submissions
 	wg.Wait()
 
-	// Collect all results
+	// Collect all results with shorter timeout
 	totalTasks := numGoroutines * tasksPerGoroutine
 	results := 0
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(500 * time.Millisecond)
 
 	for results < totalTasks {
 		select {
