@@ -141,13 +141,17 @@ func (d *Detector) FindSimilarFunctions(functions []*ast.Function) []Match {
 	return matches
 }
 
-// ParallelProcessor defines the interface for parallel similarity processing
+// ParallelProcessor defines the interface for parallel similarity processing.
 type ParallelProcessor interface {
 	FindSimilarFunctions(functions []*ast.Function, progressCallback func(completed, total int)) ([]Match, error)
 }
 
-// FindSimilarFunctionsWithProcessor finds similar functions using a provided parallel processor
-func (d *Detector) FindSimilarFunctionsWithProcessor(processor ParallelProcessor, functions []*ast.Function, progressCallback func(completed, total int)) ([]Match, error) {
+// FindSimilarFunctionsWithProcessor finds similar functions using a provided parallel processor.
+func (d *Detector) FindSimilarFunctionsWithProcessor(
+	processor ParallelProcessor,
+	functions []*ast.Function,
+	progressCallback func(completed, total int),
+) ([]Match, error) {
 	return processor.FindSimilarFunctions(functions, progressCallback)
 }
 

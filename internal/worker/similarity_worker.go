@@ -10,7 +10,7 @@ import (
 	"github.com/paveg/similarity-go/internal/similarity"
 )
 
-// ComparisonJob represents a pair of functions to compare
+// ComparisonJob represents a pair of functions to compare.
 type ComparisonJob struct {
 	Function1 *ast.Function
 	Function2 *ast.Function
@@ -18,7 +18,7 @@ type ComparisonJob struct {
 	Index2    int
 }
 
-// ComparisonResult represents the result of a similarity comparison
+// ComparisonResult represents the result of a similarity comparison.
 type ComparisonResult struct {
 	Match     *similarity.Match // Pointer to match, nil if below threshold
 	Error     error
@@ -27,7 +27,7 @@ type ComparisonResult struct {
 	Completed bool // Indicates completion of a comparison
 }
 
-// SimilarityWorker handles parallel similarity calculations
+// SimilarityWorker handles parallel similarity calculations.
 type SimilarityWorker struct {
 	detector  *similarity.Detector
 	workers   int
@@ -36,7 +36,7 @@ type SimilarityWorker struct {
 	resultsCh chan ComparisonResult
 }
 
-// NewSimilarityWorker creates a new similarity worker with the specified detector and worker count
+// NewSimilarityWorker creates a new similarity worker with the specified detector and worker count.
 func NewSimilarityWorker(detector *similarity.Detector, workers int, threshold float64) *SimilarityWorker {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
@@ -51,8 +51,11 @@ func NewSimilarityWorker(detector *similarity.Detector, workers int, threshold f
 	}
 }
 
-// FindSimilarFunctions finds similar functions using parallel processing
-func (sw *SimilarityWorker) FindSimilarFunctions(functions []*ast.Function, progressCallback func(completed, total int)) ([]similarity.Match, error) {
+// FindSimilarFunctions finds similar functions using parallel processing.
+func (sw *SimilarityWorker) FindSimilarFunctions(
+	functions []*ast.Function,
+	progressCallback func(completed, total int),
+) ([]similarity.Match, error) {
 	if len(functions) < 2 {
 		return nil, nil
 	}
@@ -62,7 +65,7 @@ func (sw *SimilarityWorker) FindSimilarFunctions(functions []*ast.Function, prog
 
 	// Create jobs for all function pairs
 	jobs := make(chan ComparisonJob, totalComparisons)
-	for i := 0; i < len(functions); i++ {
+	for i := range functions {
 		for j := i + 1; j < len(functions); j++ {
 			jobs <- ComparisonJob{
 				Function1: functions[i],
@@ -81,7 +84,7 @@ func (sw *SimilarityWorker) FindSimilarFunctions(functions []*ast.Function, prog
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
-	for i := 0; i < sw.workers; i++ {
+	for range sw.workers {
 		wg.Add(1)
 		go sw.worker(ctx, jobs, &wg)
 	}
@@ -120,7 +123,7 @@ func (sw *SimilarityWorker) FindSimilarFunctions(functions []*ast.Function, prog
 	return matches, nil
 }
 
-// worker is the main worker goroutine that processes comparison jobs
+// worker is the main worker goroutine that processes comparison jobs.
 func (sw *SimilarityWorker) worker(ctx context.Context, jobs <-chan ComparisonJob, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -150,7 +153,7 @@ func (sw *SimilarityWorker) worker(ctx context.Context, jobs <-chan ComparisonJo
 	}
 }
 
-// processComparison processes a single function comparison
+// processComparison processes a single function comparison.
 func (sw *SimilarityWorker) processComparison(job ComparisonJob) ComparisonResult {
 	// Calculate similarity
 	similarityScore := sw.detector.CalculateSimilarity(job.Function1, job.Function2)
@@ -174,7 +177,7 @@ func (sw *SimilarityWorker) processComparison(job ComparisonJob) ComparisonResul
 	return result
 }
 
-// WorkerCount returns the number of workers in the pool
+// WorkerCount returns the number of workers in the pool.
 func (sw *SimilarityWorker) WorkerCount() int {
 	return sw.workers
 }

@@ -132,19 +132,23 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 
 	// Find similar functions (use parallel processing if workers > 1)
 	var similarMatches []similarity.Match
-	
+
 	if cfg.CLI.DefaultWorkers > 1 {
 		// Use parallel processing
 		if args.verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "[similarity-go] Using parallel processing with %d workers\n", cfg.CLI.DefaultWorkers)
+			_, _ = fmt.Fprintf(
+				os.Stderr,
+				"[similarity-go] Using parallel processing with %d workers\n",
+				cfg.CLI.DefaultWorkers,
+			)
 		}
-		
+
 		// Create progress callback for verbose mode
 		var progressCallback func(completed, total int)
 		if args.verbose {
 			progressCallback = func(completed, total int) {
 				if completed%100 == 0 || completed == total {
-					_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)", 
+					_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)",
 						completed, total, float64(completed)/float64(total)*100)
 					if completed == total {
 						_, _ = fmt.Fprintf(os.Stderr, "\n")
@@ -152,7 +156,7 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 				}
 			}
 		}
-		
+
 		// Use worker for parallel processing
 		parallelWorker := worker.NewSimilarityWorker(detector, cfg.CLI.DefaultWorkers, cfg.CLI.DefaultThreshold)
 		var parallelErr error
@@ -172,8 +176,8 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 	similarGroups := groupSimilarMatches(similarMatches)
 
 	// Prepare output
-	output := map[string]interface{}{
-		"summary": map[string]interface{}{
+	output := map[string]any{
+		"summary": map[string]any{
 			"total_functions":    len(allFunctions),
 			"similar_groups":     len(similarGroups),
 			"total_duplications": countDuplications(similarGroups),
@@ -186,7 +190,7 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 }
 
 // writeOutput writes the given output in the specified format to the given output path.
-func writeOutput(output map[string]interface{}, format, outputPath string) error {
+func writeOutput(output map[string]any, format, outputPath string) error {
 	outputWriter := os.Stdout
 	if outputPath != "" {
 		file, createErr := os.Create(outputPath)
@@ -373,8 +377,8 @@ func countDuplications(groups [][]similarity.Match) int {
 }
 
 // formatSimilarGroups formats similarity groups for output.
-func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[string]interface{} {
-	var result []map[string]interface{}
+func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[string]any {
+	var result []map[string]any
 
 	for i, group := range groups {
 		if len(group) == 0 {
@@ -384,7 +388,7 @@ func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[
 		// For now, each group contains one match (pair of similar functions)
 		match := group[0]
 
-		functions := []map[string]interface{}{
+		functions := []map[string]any{
 			{
 				"file":       match.Function1.File,
 				"function":   match.Function1.Name,
@@ -401,7 +405,7 @@ func formatSimilarGroups(groups [][]similarity.Match, cfg *config.Config) []map[
 			},
 		}
 
-		groupData := map[string]interface{}{
+		groupData := map[string]any{
 			"id":                  fmt.Sprintf("group_%d", i+1),
 			"similarity_score":    match.Similarity,
 			"functions":           functions,
