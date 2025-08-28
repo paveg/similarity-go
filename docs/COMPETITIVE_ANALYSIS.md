@@ -1,78 +1,78 @@
-# 競合分析レポート: similarity-go vs similarity-generic
+# Competitive Analysis Report: similarity-go vs similarity-generic
 
-## エグゼクティブサマリー
+## Executive Summary
 
-[mizchi/similarity](https://github.com/mizchi/similarity)のsimilarity-genericプロジェクトとの詳細比較分析により、我々の`similarity-go`設計が以下の領域で圧倒的な優位性を持つことが判明しました：
+A detailed competitive analysis against [mizchi/similarity](https://github.com/mizchi/similarity)'s similarity-generic project reveals that our `similarity-go` design demonstrates overwhelming superiority in the following areas:
 
-**核心的優位性**:
+**Core Competitive Advantages**:
 
-- **10倍のパフォーマンス**: ネイティブGo実装 vs JavaScript runtime
-- **Go特化の精度**: 言語固有の最適化 vs 汎用アプローチ
-- **エンタープライズ対応**: 本格的な機能セット vs 基本機能
-- **AI統合**: 次世代開発ワークフロー対応 vs 従来型出力
+- **10x Performance**: Native Go implementation vs JavaScript runtime
+- **Go-Specific Precision**: Language-specific optimization vs generic approach
+- **Enterprise Readiness**: Professional feature set vs basic functionality
+- **AI Integration**: Next-generation development workflow support vs traditional output
 
-## 詳細比較分析
+## Detailed Competitive Analysis
 
-### 1. アーキテクチャ設計の比較
+### 1. Architecture Design Comparison
 
-#### similarity-generic (汎用アプローチ)
+#### similarity-generic (Generic Approach)
 
 ```
-汎用エンジン
-├── 多言語AST変換
-├── 基本的な類似度計算
-├── シンプルなCLI
-└── JSON出力
+Generic Engine
+├── Multi-language AST transformation
+├── Basic similarity calculation
+├── Simple CLI
+└── JSON output
 ```
 
-**制約事項**:
+**Limitations**:
 
-- 言語固有の最適化なし
-- JavaScriptランタイム依存
-- 基本的な設定機能のみ
-- 限定的なメタデータ
+- No language-specific optimization
+- JavaScript runtime dependency
+- Basic configuration functionality only
+- Limited metadata
 
-#### similarity-go (Go特化アプローチ)
+#### similarity-go (Go-Specific Approach)
 
 ```
 similarity-go/
-├── internal/ast/          # Go native AST処理
-├── internal/similarity/   # 高度な類似性検出
-├── internal/cache/        # 効率的キャッシュシステム
-├── internal/worker/       # 並列処理エンジン
-├── internal/output/       # 構造化出力
-└── pkg/types/            # Generics活用型定義
+├── internal/ast/          # Go native AST processing
+├── internal/similarity/   # Advanced similarity detection
+├── internal/cache/        # Efficient cache system
+├── internal/worker/       # Parallel processing engine
+├── internal/output/       # Structured output
+└── pkg/types/            # Generics-powered type definitions
 ```
 
-**優位性**:
+**Advantages**:
 
-- モジュラー設計による拡張性
-- Go標準ライブラリとの深い統合
-- エンタープライズグレードの設定管理
-- AI統合を前提とした構造化出力
+- Modular design enabling extensibility
+- Deep integration with Go standard library
+- Enterprise-grade configuration management
+- Structured output designed for AI integration
 
-### 2. AST解析手法の比較
+### 2. AST Analysis Method Comparison
 
 #### similarity-generic
 
 ```typescript
-// 汎用的なAST処理
+// Generic AST processing
 const ast = parseGeneric(sourceCode, language);
 const normalized = normalizeGeneric(ast);
 const hash = computeGenericHash(normalized);
 ```
 
-**制限事項**:
+**Limitations**:
 
-- 言語固有の構文理解なし
-- 基本的な正規化のみ
-- 汎用ハッシュアルゴリズム
-- セマンティック情報の欠如
+- No language-specific syntax understanding
+- Basic normalization only
+- Generic hash algorithms
+- Lack of semantic information
 
 #### similarity-go
 
 ```go
-// Go特化AST処理
+// Go-specific AST processing
 func (p *Parser) ParseFile(filename string) (*ParseResult, error) {
     file, err := parser.ParseFile(p.fileSet, filename, src, parser.ParseComments)
     functions := p.extractGoFunctions(file, filename)
@@ -80,27 +80,27 @@ func (p *Parser) ParseFile(filename string) (*ParseResult, error) {
     return &ParseResult{Functions: normalized}, nil
 }
 
-// Go固有の正規化
+// Go-specific normalization
 func (n *Normalizer) normalizeGoFunction(fn *ast.FuncDecl) *ast.FuncDecl {
-    // Goの型システム理解
-    // goroutine、channel、interface固有の処理
-    // パッケージ構造の考慮
+    // Go type system understanding
+    // goroutine, channel, interface-specific processing
+    // package structure consideration
 }
 ```
 
-**優位性**:
+**Advantages**:
 
-- `go/ast`標準ライブラリの完全活用
-- Goの型システム・パッケージ構造理解
-- goroutine/channel パターン認識
-- interface/embedding固有の処理
+- Full utilization of `go/ast` standard library
+- Understanding of Go's type system & package structure
+- goroutine/channel pattern recognition
+- interface/embedding specific processing
 
-### 3. 類似性検出アルゴリズムの比較
+### 3. Similarity Detection Algorithm Comparison
 
 #### similarity-generic
 
 ```typescript
-// 基本的な類似度計算
+// Basic similarity calculation
 function calculateSimilarity(ast1, ast2) {
   const tokens1 = extractTokens(ast1);
   const tokens2 = extractTokens(ast2);
@@ -108,64 +108,64 @@ function calculateSimilarity(ast1, ast2) {
 }
 ```
 
-**制限事項**:
+**Limitations**:
 
-- 単一指標による類似度計算
-- 構造的特徴の限定的理解
-- 言語固有パターンの見落とし
+- Single metric similarity calculation
+- Limited understanding of structural features
+- Missing language-specific patterns
 
 #### similarity-go
 
 ```go
-// 多次元類似性分析
+// Multi-dimensional similarity analysis
 type StructuralComparison struct {
-    weightAST     float64  // 0.4 - AST構造類似性
-    weightTokens  float64  // 0.3 - トークン類似性
-    weightFlow    float64  // 0.2 - 制御フロー類似性
-    weightSignature float64 // 0.1 - 関数シグネチャ類似性
+    weightAST     float64  // 0.4 - AST structure similarity
+    weightTokens  float64  // 0.3 - Token similarity
+    weightFlow    float64  // 0.2 - Control flow similarity
+    weightSignature float64 // 0.1 - Function signature similarity
 }
 
 func (sc *StructuralComparison) Compare(f1, f2 *Function) (float64, error) {
-    astSim := sc.compareASTStructure(f1, f2)      // ツリー編集距離
-    tokenSim := sc.compareTokenSequence(f1, f2)   // Jaccard係数
-    flowSim := sc.compareControlFlow(f1, f2)      // 制御フロー解析
-    sigSim := sc.compareFunctionSignature(f1, f2) // 型シグネチャ
+    astSim := sc.compareASTStructure(f1, f2)      // Tree edit distance
+    tokenSim := sc.compareTokenSequence(f1, f2)   // Jaccard coefficient
+    flowSim := sc.compareControlFlow(f1, f2)      // Control flow analysis
+    sigSim := sc.compareFunctionSignature(f1, f2) // Type signature
 
     return astSim*sc.weightAST + tokenSim*sc.weightTokens +
            flowSim*sc.weightFlow + sigSim*sc.weightSignature, nil
 }
 ```
 
-**優位性**:
+**Advantages**:
 
-- 4次元での包括的類似度評価
-- 設定可能な重み係数
-- Go固有のパターン認識
-- 高精度なクローン検出
+- 4-dimensional comprehensive similarity evaluation
+- Configurable weight coefficients
+- Go-specific pattern recognition
+- High-precision clone detection
 
-### 4. パフォーマンス最適化の比較
+### 4. Performance Optimization Comparison
 
 #### similarity-generic
 
 ```typescript
-// 基本的な並列処理
+// Basic parallel processing
 async function processFiles(files) {
   const promises = files.map(file => processFile(file));
   return await Promise.all(promises);
 }
 ```
 
-**パフォーマンス制約**:
+**Performance Constraints**:
 
-- JavaScriptランタイムの制限
-- シリアライゼーションオーバーヘッド
-- 基本的な並列処理のみ
-- メモリ効率の制約
+- JavaScript runtime limitations
+- Serialization overhead
+- Basic parallel processing only
+- Memory efficiency constraints
 
 #### similarity-go
 
 ```go
-// 高度な並列処理エンジン
+// Advanced parallel processing engine
 type Pool struct {
     workerCount int
     jobQueue    chan Job
@@ -173,7 +173,7 @@ type Pool struct {
     workers     []*Worker
 }
 
-// LRUキャッシュシステム
+// LRU cache system
 type LRUCache[K comparable, V any] struct {
     capacity int
     items    map[K]*cacheItem[V]
@@ -182,68 +182,68 @@ type LRUCache[K comparable, V any] struct {
     mu       sync.RWMutex
 }
 
-// メモリ効率的なAST処理
+// Memory-efficient AST processing
 func (p *Parser) processWithPool(files []string) {
-    // ワーカープールによる並列処理
-    // ゼロコピー最適化
-    // 効率的なメモリ管理
+    // Worker pool parallel processing
+    // Zero-copy optimization
+    // Efficient memory management
 }
 ```
 
-**パフォーマンス目標**:
+**Performance Targets**:
 
-- **処理速度**: 1,000ファイル/秒
-- **メモリ効率**: 1GBプロジェクトを512MB以内で処理
-- **並列スケーラビリティ**: CPUコア数に比例した性能向上
-- **キャッシュ効率**: 90%以上のヒット率
+- **Processing Speed**: 1,000 files/second
+- **Memory Efficiency**: Process 1GB projects within 512MB
+- **Parallel Scalability**: Performance improvement proportional to CPU cores
+- **Cache Efficiency**: >90% hit rate
 
-### 5. CLI機能・使用方法の比較
+### 5. CLI Functionality & Usage Comparison
 
 #### similarity-generic
 
 ```bash
-# 基本的なCLI
+# Basic CLI
 similarity-generic <directory>
 similarity-generic --threshold 0.8 <directory>
 ```
 
-**機能制限**:
+**Functional Limitations**:
 
-- 最小限のオプション
-- 基本的な出力形式
-- 設定ファイル非対応
-- 進捗表示なし
+- Minimal options
+- Basic output format
+- No configuration file support
+- No progress display
 
 #### similarity-go
 
 ```bash
-# 豊富なCLI機能
+# Rich CLI functionality
 similarity-go [flags] <targets...>
 
-# 主要フラグ
---threshold, -t    類似度閾値 (0.0-1.0, default: 0.8)
---format, -f       出力形式 json|yaml (default: json)
---workers, -w      並列処理数 (0=auto, default: CPU数)
---cache           キャッシュ利用 (default: true)
---ignore          ignore file指定 (default: .similarityignore)
---output, -o      出力ファイル指定
---verbose, -v     詳細出力・進捗表示
---min-lines       最小関数行数 (default: 5)
---config          設定ファイル指定
+# Major flags
+--threshold, -t    Similarity threshold (0.0-1.0, default: 0.8)
+--format, -f       Output format json|yaml (default: json)
+--workers, -w      Number of parallel workers (0=auto, default: CPU count)
+--cache           Enable caching (default: true)
+--ignore          Ignore file specification (default: .similarityignore)
+--output, -o      Output file specification
+--verbose, -v     Verbose output & progress display
+--min-lines       Minimum function lines (default: 5)
+--config          Configuration file specification
 
-# 使用例
+# Usage examples
 similarity-go --threshold 0.8 --format yaml --workers 8 ./src
 similarity-go --verbose --output report.json --ignore .myignore ./project
 ```
 
-**優位性**:
+**Advantages**:
 
-- 豊富な設定オプション
-- `.similarity.yaml`設定ファイル対応
-- `.gitignore`ライクなignore機能
-- 詳細な進捗・統計表示
+- Rich configuration options
+- `.similarity.yaml` configuration file support
+- `.gitignore`-like ignore functionality
+- Detailed progress & statistics display
 
-### 6. 出力形式の比較
+### 6. Output Format Comparison
 
 #### similarity-generic
 
@@ -259,12 +259,12 @@ similarity-go --verbose --output report.json --ignore .myignore ./project
 }
 ```
 
-**制限事項**:
+**Limitations**:
 
-- 基本的なメタデータのみ
-- AI統合を考慮しない構造
-- 限定的な統計情報
-- リファクタリング提案なし
+- Basic metadata only
+- No consideration for AI integration
+- Limited statistical information
+- No refactoring suggestions
 
 #### similarity-go
 
@@ -342,73 +342,73 @@ similarity-go --verbose --output report.json --ignore .myignore ./project
 }
 ```
 
-**AI統合優位性**:
+**AI Integration Advantages**:
 
-- リファクタリング提案の具体的記述
-- 影響度・優先度の定量化
-- Go固有のメタデータ（goroutine使用等）
-- LLMが理解しやすい構造化データ
+- Specific refactoring suggestion descriptions
+- Quantified impact & priority assessments
+- Go-specific metadata (goroutine usage, etc.)
+- Structured data easily understood by LLMs
 
-### 7. 総合的な優位性分析
+### 7. Comprehensive Competitive Analysis
 
-#### 技術的優位性
+#### Technical Advantages
 
-| 項目 | similarity-generic | similarity-go | 優位性倍率 |
-|------|-------------------|---------------|------------|
-| 処理速度 | ~100 files/sec | 1,000 files/sec | **10x** |
-| メモリ効率 | 制限あり | 512MB/1GB project | **2-3x** |
-| 精度 | 汎用アルゴリズム | Go特化最適化 | **1.5-2x** |
-| 機能数 | 基本機能 | エンタープライズ機能 | **5x** |
-| 設定柔軟性 | 限定的 | 包括的設定システム | **4x** |
+| Category | similarity-generic | similarity-go | Advantage Ratio |
+|----------|-------------------|---------------|-----------------|
+| Processing Speed | ~100 files/sec | 1,000 files/sec | **10x** |
+| Memory Efficiency | Limited | 512MB/1GB project | **2-3x** |
+| Accuracy | Generic algorithm | Go-specific optimization | **1.5-2x** |
+| Feature Count | Basic features | Enterprise features | **5x** |
+| Configuration Flexibility | Limited | Comprehensive config system | **4x** |
 
-#### 戦略的ポジショニング
+#### Strategic Positioning
 
-**similarity-generic (汎用ツール)**:
+**similarity-generic (Generic Tool)**:
 
-- 🎯 **ターゲット**: 多言語対応が必要な小規模チーム
-- 📊 **使用場面**: 基本的な類似性チェック
-- 🚀 **利点**: 導入の簡単さ
-- ⚠️ **制約**: 精度・性能・機能の制限
+- 🎯 **Target**: Small teams needing multi-language support
+- 📊 **Use Case**: Basic similarity checking
+- 🚀 **Advantage**: Ease of adoption
+- ⚠️ **Constraints**: Limited precision, performance, and functionality
 
-**similarity-go (Go特化ソリューション)**:
+**similarity-go (Go-Specific Solution)**:
 
-- 🎯 **ターゲット**: Goエンタープライズ開発チーム
-- 📊 **使用場面**: 大規模リファクタリング、AI支援開発
-- 🚀 **利点**: 最高性能・精度・AI統合
-- ⚠️ **制約**: Go限定（意図的な設計選択）
+- 🎯 **Target**: Go enterprise development teams
+- 📊 **Use Case**: Large-scale refactoring, AI-assisted development
+- 🚀 **Advantage**: Maximum performance, precision, AI integration
+- ⚠️ **Constraints**: Go-only (intentional design choice)
 
-### 8. 市場機会分析
+### 8. Market Opportunity Analysis
 
-#### 差別化要因
+#### Differentiation Factors
 
-1. **Go Ecosystem Leadership**: Go開発者向けの最高性能ツール
-2. **AI-First Design**: 次世代開発ワークフローへの対応
-3. **Enterprise Features**: 本格的な開発チーム向け機能セット
-4. **Performance Excellence**: ネイティブ実装による圧倒的性能
+1. **Go Ecosystem Leadership**: Highest performance tool for Go developers
+2. **AI-First Design**: Next-generation development workflow support
+3. **Enterprise Features**: Professional feature set for serious development teams
+4. **Performance Excellence**: Overwhelming performance through native implementation
 
-#### 競合優位性の維持戦略
+#### Competitive Advantage Maintenance Strategy
 
-1. **Go言語の深い理解**: 標準ライブラリ・イディオムの完全活用
-2. **継続的パフォーマンス改善**: プロファイリング・最適化の徹底
-3. **AI統合の進化**: LLM技術の進歩に合わせた出力形式の改善
-4. **コミュニティ連携**: Go開発者コミュニティとの密接な連携
+1. **Deep Go Language Understanding**: Full utilization of standard library & idioms
+2. **Continuous Performance Improvement**: Thorough profiling & optimization
+3. **Evolving AI Integration**: Output format improvements aligned with LLM technology advances
+4. **Community Collaboration**: Close collaboration with Go developer community
 
-## 結論
+## Conclusion
 
-`similarity-go`は単なる類似性検出ツールではなく、**Go言語における次世代コード解析プラットフォーム**として設計されています。
+`similarity-go` is designed not merely as a similarity detection tool, but as a **next-generation code analysis platform for the Go language**.
 
-### 核心的価値提案
+### Core Value Proposition
 
-1. **最高のパフォーマンス**: ネイティブGo実装による10倍高速処理
-2. **最高の精度**: Go言語特化による精密な類似性検出
-3. **AI統合対応**: 現代的な開発ワークフローへの最適化
-4. **エンタープライズ対応**: 大規模プロジェクトに必要な全機能
+1. **Maximum Performance**: 10x faster processing through native Go implementation
+2. **Maximum Precision**: Precise similarity detection through Go language specialization
+3. **AI Integration Ready**: Optimized for modern development workflows
+4. **Enterprise Ready**: Complete feature set required for large-scale projects
 
-### 推奨戦略
+### Recommended Strategy
 
-1. **Go特化の優位性を強調**: 汎用ツールでは実現できない精度・性能
-2. **AI統合機能をアピール**: 未来志向の開発チーム向けソリューション
-3. **パフォーマンス指標の明示**: 具体的な数値による差別化
-4. **エンタープライズ機能の訴求**: 本格的な開発チーム向け価値提案
+1. **Emphasize Go-Specific Advantages**: Precision & performance unachievable by generic tools
+2. **Promote AI Integration Features**: Future-oriented solution for development teams
+3. **Highlight Performance Metrics**: Differentiation through concrete numerical comparisons
+4. **Appeal to Enterprise Features**: Value proposition for professional development teams
 
-`similarity-go`は、Go言語エコシステムにおいて**デファクトスタンダード**となる潜在能力を持つ、戦略的に設計されたソリューションです。
+`similarity-go` has the potential to become the **de facto standard** in the Go language ecosystem, strategically designed as a comprehensive solution.

@@ -1,22 +1,22 @@
 # Go Generics Enhancement Plan - Similarity Detection Tool
 
-## Genericsの活用機会と設計改善
+## Leveraging Generics for Design Improvements
 
-Go 1.18以降のGenericsを活用して、既存設計をより型安全で保守性の高い実装に改善する計画です。
+A plan to utilize Go 1.18+ Generics to improve the existing design into a more type-safe and maintainable implementation.
 
-## 1. コレクション・データ構造の型安全化
+## 1. Type-Safe Collections & Data Structures
 
-### 1.1 Result型の汎用化
+### 1.1 Generic Result Type
 
 ```go
-// Before (interface{}を使用)
+// Before (using interface{})
 type Result struct {
     JobID string
     Data  interface{}
     Error error
 }
 
-// After (Genericsを使用)
+// After (using Generics)
 type Result[T any] struct {
     JobID string
     Data  T
@@ -28,7 +28,7 @@ type ComparisonResult = Result[float64]
 type HashResult = Result[string]
 ```
 
-### 1.2 Worker Poolの型安全化
+### 1.2 Type-Safe Worker Pool
 
 ```go
 // internal/worker/pool.go
@@ -52,7 +52,7 @@ type JobProcessor[TJob any, TResult any] interface {
     Process(job Job[TJob]) Result[TResult]
 }
 
-// 具体的な型定義
+// Concrete type definitions
 type FileParseJob struct {
     FilePath string
     Content  []byte
@@ -66,7 +66,7 @@ type ParsedFileResult struct {
 type FileParserPool = Pool[FileParseJob, ParsedFileResult]
 ```
 
-### 1.3 キャッシュシステムの汎用化
+### 1.3 Generic Cache System
 
 ```go
 // internal/cache/manager.go
@@ -93,14 +93,14 @@ type cacheItem[V any] struct {
     next  *cacheItem[V]
 }
 
-// 具体的なキャッシュインスタンス
+// Concrete cache instances
 type FunctionCache = Cache[string, *CachedFunction]
 type FileCache = Cache[string, *CacheEntry]
 ```
 
-## 2. アルゴリズム・比較処理の汎用化
+## 2. Generic Algorithms & Comparison Processing
 
-### 2.1 比較アルゴリズムの抽象化
+### 2.1 Abstract Comparison Algorithms
 
 ```go
 // internal/similarity/algorithm.go
@@ -121,7 +121,7 @@ type SimilarGroup[T Comparable] struct {
     RefactorSuggestion string `json:"refactor_suggestion"`
 }
 
-// 構造比較アルゴリズムの汎用実装
+// Generic structural comparison algorithm implementation
 type StructuralComparator[T Comparable] struct {
     threshold float64
     weights   ComparisonWeights
@@ -140,7 +140,7 @@ func NewStructuralComparator[T Comparable](threshold float64) *StructuralCompara
 }
 
 func (sc *StructuralComparator[T]) Compare(a, b T) (float64, error) {
-    // 汎用比較ロジック
+    // Generic comparison logic
     hashA, hashB := a.Hash(), b.Hash()
     if hashA == hashB {
         return 1.0, nil
@@ -153,7 +153,7 @@ func (sc *StructuralComparator[T]) Compare(a, b T) (float64, error) {
 }
 ```
 
-### 2.2 関数型の型制約定義
+### 2.2 Function Type Constraint Definitions
 
 ```go
 // pkg/types/constraints.go
@@ -174,7 +174,7 @@ type Function struct {
     signature  string
 }
 
-// Comparableインターフェースの実装
+// Comparable interface implementation
 func (f *Function) Hash() string {
     if f.hash == "" {
         hasher := NewStructureHasher()
@@ -200,15 +200,15 @@ func (f *Function) Normalize() Comparable {
 }
 ```
 
-## 3. コンテナ・ユーティリティの汎用化
+## 3. Generic Containers & Utilities
 
-### 3.1 汎用コレクション操作
+### 3.1 Generic Collection Operations
 
 ```go
 // pkg/collections/generic.go
 package collections
 
-// フィルタリング
+// Filtering
 func Filter[T any](slice []T, predicate func(T) bool) []T {
     result := make([]T, 0, len(slice))
     for _, item := range slice {
@@ -219,7 +219,7 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
     return result
 }
 
-// マッピング
+// Mapping
 func Map[T, U any](slice []T, mapper func(T) U) []U {
     result := make([]U, len(slice))
     for i, item := range slice {
@@ -228,7 +228,7 @@ func Map[T, U any](slice []T, mapper func(T) U) []U {
     return result
 }
 
-// グルーピング
+// Grouping
 func GroupBy[T any, K comparable](slice []T, keyFunc func(T) K) map[K][]T {
     result := make(map[K][]T)
     for _, item := range slice {
@@ -238,7 +238,7 @@ func GroupBy[T any, K comparable](slice []T, keyFunc func(T) K) map[K][]T {
     return result
 }
 
-// 並列マッピング
+// Parallel mapping
 func ParallelMap[T, U any](slice []T, mapper func(T) U, workers int) []U {
     if workers <= 0 {
         workers = runtime.NumCPU()
@@ -247,7 +247,7 @@ func ParallelMap[T, U any](slice []T, mapper func(T) U, workers int) []U {
     input := make(chan indexedItem[T], len(slice))
     output := make(chan indexedItem[U], len(slice))
     
-    // Workers起動
+    // Start workers
     for i := 0; i < workers; i++ {
         go func() {
             for item := range input {
@@ -259,7 +259,7 @@ func ParallelMap[T, U any](slice []T, mapper func(T) U, workers int) []U {
         }()
     }
     
-    // データ送信
+    // Send data
     go func() {
         defer close(input)
         for i, item := range slice {
@@ -267,7 +267,7 @@ func ParallelMap[T, U any](slice []T, mapper func(T) U, workers int) []U {
         }
     }()
     
-    // 結果収集
+    // Collect results
     result := make([]U, len(slice))
     for i := 0; i < len(slice); i++ {
         item := <-output
@@ -283,7 +283,7 @@ type indexedItem[T any] struct {
 }
 ```
 
-### 3.2 Optional型の実装
+### 3.2 Optional Type Implementation
 
 ```go
 // pkg/types/optional.go
@@ -329,9 +329,9 @@ func (o Optional[T]) Map(mapper func(T) T) Optional[T] {
 }
 ```
 
-## 4. エラーハンドリングの改善
+## 4. Enhanced Error Handling
 
-### 4.1 Result型パターンの実装
+### 4.1 Result Type Pattern Implementation
 
 ```go
 // pkg/types/result.go
@@ -385,7 +385,7 @@ func (r Result[T]) AndThen[U any](f func(T) Result[U]) Result[U] {
 }
 ```
 
-### 4.2 型安全なパーサー実装
+### 4.2 Type-Safe Parser Implementation
 
 ```go
 // internal/ast/parser.go
@@ -402,7 +402,7 @@ func NewParser[T ASTNode]() *Parser[T] {
 }
 
 func (p *Parser[T]) ParseFile(filename string) Result[[]T] {
-    // キャッシュチェック
+    // Check cache
     if cached, exists := p.cache.Get(filename); exists {
         return cached
     }
@@ -434,9 +434,9 @@ func (p *Parser[*Function]) extractFunctions(file *ast.File, filename string) []
 }
 ```
 
-## 5. 設定・依存性注入の型安全化
+## 5. Type-Safe Configuration & Dependency Injection
 
-### 5.1 設定の型安全化
+### 5.1 Type-Safe Configuration
 
 ```go
 // internal/config/typed.go
@@ -456,7 +456,7 @@ func (c *Config[T]) Update(updater func(T) T) {
     c.value = updater(c.value)
 }
 
-// 具体的な設定型
+// Concrete configuration types
 type SimilarityConfig struct {
     Threshold     float64
     MinLines      int
@@ -479,7 +479,7 @@ type ComparisonWeights struct {
 }
 ```
 
-### 5.2 依存性注入コンテナ
+### 5.2 Dependency Injection Container
 
 ```go
 // pkg/di/container.go
@@ -533,44 +533,44 @@ func (c *container) Resolve[T any]() T {
 }
 ```
 
-## 6. 実装における利点
+## 6. Implementation Benefits
 
-### 6.1 型安全性の向上
+### 6.1 Improved Type Safety
 
-- **コンパイル時エラー検出**: `interface{}`の使用を削減し、型不整合をコンパイル時に検出
-- **自動補完の改善**: IDEでの型推論とコード補完の精度向上
-- **リファクタリング安全性**: 型情報に基づいた安全なリファクタリング
+- **Compile-time Error Detection**: Reduce usage of `interface{}` and detect type mismatches at compile time
+- **Enhanced Auto-completion**: Improved type inference and code completion accuracy in IDEs
+- **Refactoring Safety**: Safe refactoring based on type information
 
-### 6.2 パフォーマンス改善
+### 6.2 Performance Improvements
 
-- **ボクシング回避**: `interface{}`によるヒープアロケーションを削減
-- **インライン最適化**: ジェネリック関数のインライン展開による最適化
-- **メモリ効率**: 型特化されたデータ構造による効率的なメモリ使用
+- **Avoid Boxing**: Reduce heap allocations from `interface{}` boxing
+- **Inline Optimization**: Inline expansion of generic functions for optimization
+- **Memory Efficiency**: Efficient memory usage through type-specialized data structures
 
-### 6.3 保守性の向上
+### 6.3 Enhanced Maintainability
 
-- **コードの再利用**: 汎用的なアルゴリズムとデータ構造
-- **可読性向上**: 型制約による明確なAPI設計
-- **テスタビリティ**: 型安全なモックとテストヘルパー
+- **Code Reusability**: Generic algorithms and data structures
+- **Improved Readability**: Clear API design through type constraints
+- **Testability**: Type-safe mocks and test helpers
 
-## 7. マイグレーション計画
+## 7. Migration Plan
 
-### Phase 1: 基盤型の導入
+### Phase 1: Foundation Type Introduction
 
-- [ ] Result型、Optional型の実装
-- [ ] 汎用コレクション操作の実装
-- [ ] 既存コードのGenerics対応準備
+- [ ] Implement Result and Optional types
+- [ ] Implement generic collection operations
+- [ ] Prepare existing code for Generics compatibility
 
-### Phase 2: コア機能の型安全化
+### Phase 2: Core Feature Type Safety
 
-- [ ] Worker Poolのジェネリック化
-- [ ] キャッシュシステムのジェネリック化
-- [ ] パーサーの型安全化
+- [ ] Genericize Worker Pool
+- [ ] Genericize Cache System
+- [ ] Type-safe Parser implementation
 
-### Phase 3: アルゴリズムの抽象化
+### Phase 3: Algorithm Abstraction
 
-- [ ] 比較アルゴリズムのジェネリック化
-- [ ] 結果型の統一
-- [ ] 設定システムの型安全化
+- [ ] Genericize comparison algorithms
+- [ ] Unify result types
+- [ ] Type-safe configuration system
 
-この改善により、Go 1.18+の最新機能を活用した、より堅牢で保守性の高いコード類似性検証ツールが実現できます。
+This enhancement leverages Go 1.18+ features to create a more robust, maintainable code similarity verification tool with improved type safety and performance characteristics.
