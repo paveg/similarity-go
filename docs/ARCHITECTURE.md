@@ -1,417 +1,455 @@
 # Go Code Similarity Detection Tool - Architecture Design
 
-## システム概要
+## System Overview
 
-Go ASTを利用した高性能なコード類似性検証ツール。重複コードのクローン検出に特化し、AIツールによるリファクタリング支援を目的とする。
+**similarity-go** is a high-performance Go code similarity detection CLI tool that uses multi-factor AST analysis to identify duplicate and similar code patterns. The system is designed for scalability, thread safety, and accuracy in detecting code similarities across Go projects.
 
-## アーキテクチャ図
+## Architecture Diagram
 
 ```mermaid
 graph TB
-    CLI[CLI Interface] --> Scanner[File Scanner]
-    CLI --> Config[Configuration Manager]
+    CLI[CLI Interface] --> Config[Configuration Manager]
+    CLI --> Scanner[File Scanner]
 
-    Scanner --> IgnoreFilter[Ignore Filter]
-    Scanner --> FileWalker[Directory Walker]
+    Config --> Validation[Config Validation]
+    Scanner --> IgnoreFilter[Ignore Pattern Filter]
+    Scanner --> DirectoryWalker[Directory Walker]
 
-    FileWalker --> WorkerPool[Worker Pool]
+    DirectoryWalker --> WorkerPool[Worker Pool System]
     WorkerPool --> ASTParser[AST Parser]
 
     ASTParser --> FunctionExtractor[Function Extractor]
     FunctionExtractor --> Normalizer[AST Normalizer]
-    Normalizer --> Hasher[Structure Hasher]
+    Normalizer --> ThreadSafeFunction[Thread-Safe Function]
 
-    Hasher --> Cache[Cache Manager]
-    Cache --> SimilarityDetector[Similarity Detector]
+    ThreadSafeFunction --> SimilarityDetector[Multi-Factor Similarity Detector]
 
-    SimilarityDetector --> Algorithm[Comparison Algorithm]
-    Algorithm --> ThresholdFilter[Threshold Filter]
+    SimilarityDetector --> TreeEditDistance[Tree Edit Distance]
+    SimilarityDetector --> TokenAnalysis[Token Sequence Analysis]
+    SimilarityDetector --> StructuralSigs[Structural Signatures]
+    SimilarityDetector --> WeightedScoring[Weighted Score Aggregation]
 
-    ThresholdFilter --> ResultAggregator[Result Aggregator]
-    ResultAggregator --> OutputFormatter[Output Formatter]
+    WeightedScoring --> ThresholdFilter[Threshold Filtering]
+    ThresholdFilter --> ResultGrouper[Similarity Grouper]
+    ResultGrouper --> OutputFormatter[Output Formatter]
+
     OutputFormatter --> JSONOutput[JSON Output]
     OutputFormatter --> YAMLOutput[YAML Output]
 ```
 
-## コンポーネント詳細設計
+## Component Architecture Details
 
 ### 1. CLI Interface Layer
 
+**Location**: `cmd/`
+
 ```go
 // cmd/root.go
-type Config struct {
-    Threshold   float64
-    Format      string
-    Workers     int
-    UseCache    bool
-    IgnoreFile  string
-    OutputFile  string
-    Verbose     bool
-    MinLines    int
-    Targets     []string
+type CLIArgs struct {
+    threshold   float64
+    format      string
+    workers     int
+    cache       bool
+    configFile  string
+    output      string
+    verbose     bool
+    minLines    int
 }
+
+// Main CLI command structure
+func newRootCommand(args *CLIArgs) *cobra.Command
+func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) error
 ```
 
-### 2. File Scanner Layer
+**Key Features:**
+
+- Cobra-based CLI with comprehensive flag support
+- Configuration file integration
+- Input validation and error handling
+- Progress reporting and verbose logging
+
+### 2. Configuration Management Layer
+
+**Location**: `internal/config/`
 
 ```go
-// internal/scanner/walker.go
-type FileWalker struct {
-    ignoreMatcher *IgnoreMatcher
-    extensions    []string
+// internal/config/config.go
+type Config struct {
+    CLI        CLIConfig        `yaml:"cli"`
+    Similarity SimilarityConfig `yaml:"similarity"`
+    Processing ProcessingConfig `yaml:"processing"`
+    Output     OutputConfig     `yaml:"output"`
+    Ignore     IgnoreConfig     `yaml:"ignore"`
 }
 
-type ScanResult struct {
-    Files []string
-    Errors []error
+type SimilarityWeights struct {
+    TreeEdit           float64 `yaml:"tree_edit"`
+    TokenSimilarity    float64 `yaml:"token_similarity"`
+    Structural         float64 `yaml:"structural"`
+    Signature          float64 `yaml:"signature"`
 }
-
-func (fw *FileWalker) Walk(targets []string) (*ScanResult, error)
 ```
+
+**Key Features:**
+
+- YAML-based configuration with validation
+- Hierarchical configuration structure
+- Default value management with fallbacks
+- Runtime configuration validation
 
 ### 3. AST Processing Layer
 
+**Location**: `internal/ast/`
+
 ```go
 // internal/ast/parser.go
-type ASTParser struct {
+type Parser struct {
     fileSet *token.FileSet
-}
-
-type ParsedFile struct {
-    Path      string
-    Functions []*Function
-    Hash      string
-    Error     error
 }
 
 // internal/ast/function.go
 type Function struct {
-    Name       string
-    File       string
-    StartLine  int
-    EndLine    int
-    AST        *ast.FuncDecl
-    Normalized *ast.FuncDecl
-    Hash       string
-    Signature  string
+    Name      string
+    File      string
+    StartLine int
+    EndLine   int
+    AST       *ast.FuncDecl
+    LineCount int
+
+    // Thread-safe fields with mutex protection
+    mu        sync.RWMutex
+    hash      string
+    signature string
 }
 
-// internal/ast/hash.go
-type StructureHasher struct {
-    ignoreNames bool
-    ignoreComments bool
-}
-
-func (sh *StructureHasher) HashFunction(fn *ast.FuncDecl) (string, error)
+// Thread-safe methods with proper locking
+func (f *Function) Hash() string
+func (f *Function) GetSignature() string
 ```
 
-### 4. Similarity Detection Layer
+**Key Features:**
+
+- Thread-safe function representation with `sync.RWMutex`
+- Race condition-free concurrent access
+- Efficient AST parsing and function extraction
+- Function normalization and structural hashing
+
+### 4. Multi-Factor Similarity Detection Layer
+
+**Location**: `internal/similarity/`
 
 ```go
 // internal/similarity/detector.go
 type Detector struct {
     threshold float64
-    algorithm ComparisonAlgorithm
+    config    *config.Config
 }
 
-type SimilarityResult struct {
-    Groups []SimilarGroup
-    Stats  DetectionStats
+type Match struct {
+    Func1 *ast.Function
+    Func2 *ast.Function
+    Score float64
 }
 
-type SimilarGroup struct {
-    ID               string
-    SimilarityScore  float64
-    Functions        []*Function
-    RefactorSuggestion string
-}
-
-// internal/similarity/algorithm.go
-type ComparisonAlgorithm interface {
-    Compare(f1, f2 *Function) (float64, error)
-    BatchCompare(functions []*Function) ([]SimilarGroup, error)
-}
-
-type StructuralComparison struct {
-    weightAST    float64
-    weightTokens float64
-    weightFlow   float64
+// Multi-factor similarity calculation
+func (d *Detector) CalculateSimilarity(f1, f2 *ast.Function) float64 {
+    // Combines multiple similarity metrics:
+    // - Tree edit distance (30%)
+    // - Token sequence similarity (30%)
+    // - Structural signatures (25%)
+    // - Function signatures (15%)
 }
 ```
 
-### 5. Cache System
+**Algorithm Components:**
 
-```go
-// internal/cache/manager.go
-type CacheManager struct {
-    storage Storage
-    ttl     time.Duration
-}
+1. **Tree Edit Distance**: Dynamic programming-based AST structure comparison
+2. **Token Sequence Analysis**: Levenshtein distance on normalized token sequences
+3. **Structural Signatures**: Function body structure comparison
+4. **Signature Matching**: Function signature similarity analysis
 
-type CacheEntry struct {
-    FileHash     string
-    Functions    []*Function
-    LastModified time.Time
-}
+**Key Features:**
 
-type Storage interface {
-    Get(key string) (*CacheEntry, error)
-    Set(key string, entry *CacheEntry) error
-    Delete(key string) error
-    Clear() error
-}
-```
+- Weighted multi-factor scoring system
+- Configurable algorithm weights
+- Early termination optimizations
+- Threshold-based filtering
 
-### 6. Worker Pool System
+### 5. Parallel Processing Layer
+
+**Location**: `internal/worker/`
 
 ```go
 // internal/worker/pool.go
 type Pool struct {
-    workerCount int
-    jobQueue    chan Job
-    resultQueue chan Result
-    workers     []*Worker
+    workers     int
+    jobs        chan func()
+    results     chan interface{}
+    wg          sync.WaitGroup
+    stopOnce    sync.Once
+    stopped     chan struct{}
 }
 
-type Job struct {
-    Type JobType
-    Data interface{}
+// internal/worker/similarity_worker.go
+type SimilarityWorker struct {
+    pool      *Pool
+    detector  *similarity.Detector
+    processor ParallelProcessor
 }
-
-type JobType int
-const (
-    ParseFileJob JobType = iota
-    CompareJob
-    HashJob
-)
 ```
 
-## データフロー
+**Key Features:**
 
-### 1. 初期化フェーズ
+- CPU-efficient worker pools
+- Concurrent similarity detection
+- Progress callback support
+- Graceful shutdown handling
 
-1. CLI引数解析
-2. 設定ファイル読み込み
-3. Ignore patterns読み込み
-4. Worker pool初期化
-5. Cache system初期化
+### 6. File System and Scanning Layer
 
-### 2. ファイルスキャンフェーズ
-
-1. 対象ディレクトリ/ファイル走査
-2. `.go`ファイル抽出
-3. Ignore pattern適用
-4. ファイルリスト生成
-
-### 3. AST解析フェーズ
-
-1. 並列ファイル解析
-2. AST構造抽出
-3. 関数レベル分割
-4. 構造正規化
-5. ハッシュ値計算
-
-### 4. 類似性検出フェーズ
-
-1. キャッシュチェック
-2. 関数間類似度計算
-3. 閾値フィルタリング
-4. 類似グループ生成
-
-### 5. 結果出力フェーズ
-
-1. 結果集約
-2. 統計情報生成
-3. フォーマット変換
-4. ファイル出力
-
-## アルゴリズム設計
-
-### AST構造比較アルゴリズム
-
-#### 1. 構造ハッシュ方式
+**Location**: `cmd/` (scanning functionality)
 
 ```go
-func (sh *StructureHasher) computeHash(node ast.Node) string {
-    var buffer bytes.Buffer
-    ast.Inspect(node, func(n ast.Node) bool {
-        if n == nil {
-            buffer.WriteString("nil")
-            return false
-        }
-
-        switch typed := n.(type) {
-        case *ast.IfStmt:
-            buffer.WriteString("if")
-        case *ast.ForStmt:
-            buffer.WriteString("for")
-        case *ast.CallExpr:
-            buffer.WriteString("call")
-        // 他のノードタイプ...
-        }
-        return true
-    })
-
-    return fmt.Sprintf("%x", sha256.Sum256(buffer.Bytes()))
-}
+// File scanning with intelligent filtering
+func scanDirectory(targetPath string, cfg *config.Config) ([]*ast.Function, error)
+func parseGoFile(filePath string) ([]*ast.Function, error)
+func shouldIgnoreFile(filePath string, patterns []string) bool
 ```
 
-#### 2. ツリー編集距離方式
+**Key Features:**
+
+- Recursive directory traversal
+- Go file detection and filtering
+- Ignore pattern matching (similar to .gitignore)
+- Error handling for inaccessible files
+
+## Data Flow Architecture
+
+### 1. Initialization Phase
+
+1. **CLI Argument Parsing**: Command-line arguments and flags processing
+2. **Configuration Loading**: YAML configuration file loading with validation
+3. **Ignore Pattern Setup**: Pattern matching initialization for file filtering
+4. **Worker Pool Creation**: Parallel processing system initialization
+
+### 2. File Discovery Phase
+
+1. **Target Resolution**: Resolve file and directory targets
+2. **Directory Traversal**: Recursive scanning with ignore pattern application
+3. **Go File Filtering**: Extract `.go` files excluding test files and vendor code
+4. **File List Generation**: Create processing queue for AST parsing
+
+### 3. AST Analysis Phase
+
+1. **Parallel Parsing**: Concurrent AST parsing across worker pool
+2. **Function Extraction**: Extract function declarations from AST
+3. **Structure Normalization**: Normalize AST structures for comparison
+4. **Hash Calculation**: Generate structural hashes for functions
+
+### 4. Similarity Detection Phase
+
+1. **Multi-Factor Analysis**: Apply comprehensive similarity algorithm
+2. **Threshold Filtering**: Filter results based on similarity thresholds
+3. **Group Generation**: Create similarity groups from matched functions
+4. **Score Calculation**: Calculate weighted similarity scores
+
+### 5. Output Generation Phase
+
+1. **Result Aggregation**: Collect and organize similarity results
+2. **Statistics Generation**: Generate summary statistics
+3. **Format Conversion**: Convert to JSON or YAML format
+4. **File Output**: Write results to specified output destination
+
+## Algorithm Design Details
+
+### Multi-Factor Similarity Algorithm
+
+The similarity detection uses a weighted combination of four key metrics:
+
+#### 1. AST Tree Edit Distance (Weight: 30%)
 
 ```go
-func (sc *StructuralComparison) treeEditDistance(ast1, ast2 ast.Node) float64 {
-    // 動的プログラミングによるツリー編集距離計算
-    // 挿入、削除、置換のコストを計算
+func (d *Detector) calculateTreeEditSimilarity(f1, f2 *ast.Function) float64 {
+    // Normalized AST tree edit distance calculation
+    // Uses dynamic programming for optimal alignment
+    distance := d.treeEditDistance(f1.AST, f2.AST)
+    maxNodes := float64(max(d.countASTNodes(f1.AST), d.countASTNodes(f2.AST)))
+    return 1.0 - (distance / maxNodes)
 }
 ```
 
-#### 3. トークンベース比較
+#### 2. Token Sequence Analysis (Weight: 30%)
 
 ```go
-func (sc *StructuralComparison) tokenSimilarity(f1, f2 *Function) float64 {
-    tokens1 := extractTokens(f1.AST)
-    tokens2 := extractTokens(f2.AST)
+func tokenSequenceSimilarity(f1, f2 *ast.Function) float64 {
+    tokens1 := normalizeTokenSequence(f1.AST)
+    tokens2 := normalizeTokenSequence(f2.AST)
 
-    // Jaccard係数またはコサイン類似度を計算
-    return jaccardSimilarity(tokens1, tokens2)
+    // Levenshtein distance on normalized token sequences
+    distance := levenshteinDistance(tokens1, tokens2)
+    maxLen := float64(max(len(tokens1), len(tokens2)))
+    return 1.0 - (distance / maxLen)
 }
 ```
 
-## パフォーマンス最適化
+#### 3. Structural Signatures (Weight: 25%)
 
-### 1. 並列処理戦略
+```go
+func (d *Detector) calculateStructuralSimilarity(f1, f2 *ast.Function) float64 {
+    sig1 := d.getStructuralSignature(f1.AST)
+    sig2 := d.getStructuralSignature(f2.AST)
+    return d.compareBodyStructure(sig1, sig2)
+}
+```
 
-- ファイル解析の並列化
-- 関数比較の並列化
-- CPU効率的なワーカープール
+#### 4. Function Signatures (Weight: 15%)
 
-### 2. メモリ最適化
+```go
+func (d *Detector) calculateSignatureSimilarity(f1, f2 *ast.Function) float64 {
+    return d.stringSimilarity(f1.GetSignature(), f2.GetSignature())
+}
+```
 
-- AST構造の効率的な表現
-- 不要なメタデータの削減
-- ガベージコレクション最適化
+## Performance Optimization Strategies
 
-### 3. キャッシュ戦略
+### 1. Concurrent Processing
 
-- ファイルハッシュベースキャッシュ
-- 関数レベルキャッシュ
-- LRU eviction policy
+- **Worker Pool Architecture**: CPU-efficient parallel processing
+- **Thread-Safe Operations**: Race condition-free concurrent access
+- **Load Balancing**: Optimal work distribution across CPU cores
 
-### 4. アルゴリズム最適化
+### 2. Memory Optimization
 
-- 早期終了条件
-- インデックス構造の活用
-- 類似度計算の近似手法
+- **Efficient AST Representation**: Minimal memory footprint for AST storage
+- **Selective Processing**: Process only relevant functions meeting minimum criteria
+- **Garbage Collection Optimization**: Minimize allocations in hot paths
 
-## エラーハンドリング設計
+### 3. Algorithm Efficiency
 
-### エラー分類
+- **Early Termination**: Skip comparisons below threshold quickly
+- **Structural Pre-filtering**: Use quick heuristics before expensive comparisons
+- **Optimized Distance Calculations**: Efficient dynamic programming implementations
+
+### 4. Caching Strategy
+
+- **Result Caching**: Cache similarity calculations for repeated analyses
+- **Function Hashing**: Quick identification of identical functions
+- **Configuration-Based Caching**: Configurable caching behavior
+
+## Error Handling Architecture
+
+### Error Classification
 
 ```go
 type ErrorType int
 const (
     ParseError ErrorType = iota
     FileSystemError
-    CacheError
     ConfigurationError
-    ThresholdError
+    ValidationError
+    ConcurrencyError
 )
+```
 
-type SimilarityError struct {
-    Type    ErrorType
-    Message string
-    File    string
-    Line    int
-    Cause   error
+### Error Handling Strategy
+
+1. **Graceful Degradation**: Continue processing when non-critical errors occur
+2. **Comprehensive Logging**: Detailed error reporting with context
+3. **User-Friendly Messages**: Clear error messages for end users
+4. **Recovery Mechanisms**: Automatic recovery from transient failures
+
+## Testing Architecture
+
+### Test Coverage Strategy
+
+- **Unit Tests**: 78-88% coverage across core packages
+- **Integration Tests**: End-to-end workflow validation
+- **Race Condition Tests**: Concurrent processing validation
+- **Performance Tests**: Scalability and performance benchmarks
+
+### Test Structure
+
+```go
+// Example test structure
+func TestDetector_CalculateSimilarity(t *testing.T) {
+    tests := []struct {
+        name     string
+        func1    *ast.Function
+        func2    *ast.Function
+        expected float64
+    }{
+        // Test cases...
+    }
+    // Table-driven test implementation
 }
 ```
 
-### エラー処理方針
+## Configuration Management
 
-1. **非致命的エラー**: ログ出力して処理継続
-2. **致命的エラー**: 適切なクリーンアップ後終了
-3. **部分的失敗**: 成功した結果のみ出力
-
-## 設定管理
-
-### 設定ファイル例 (.similarity.yaml)
+### Configuration File Structure
 
 ```yaml
-threshold: 0.8
-format: json
-workers: 0  # 0 = auto-detect CPU count
-cache:
-  enabled: true
-  ttl: 24h
-  path: .similarity-cache
-output:
-  file: similarity-report.json
-  verbose: false
-ignore:
-  files:
-    - "*.pb.go"
-    - "*_test.go"
-  directories:
-    - vendor/
-    - .git/
-min_lines: 5
-algorithm:
+# .similarity-config.yaml
+cli:
+  default_threshold: 0.8
+  default_min_lines: 5
+  default_format: "json"
+  default_workers: 0  # 0 = use all CPU cores
+
+similarity:
   weights:
-    ast: 0.5
-    tokens: 0.3
-    flow: 0.2
+    tree_edit: 0.3
+    token_similarity: 0.3
+    structural: 0.25
+    signature: 0.15
+  thresholds:
+    default_similar_operations: 0.5
+  limits:
+    max_cache_size: 10000
+
+ignore:
+  patterns:
+    - "*_test.go"
+    - "vendor/"
+    - ".git/"
 ```
 
-## 拡張性設計
+## Extensibility Design
 
-### プラグインアーキテクチャ
+### Plugin Architecture Potential
 
 ```go
-type Plugin interface {
+type SimilarityPlugin interface {
     Name() string
-    Version() string
+    CalculateSimilarity(f1, f2 *ast.Function) float64
     Initialize(config map[string]interface{}) error
-    Process(input interface{}) (interface{}, error)
-}
-
-type ComparisonPlugin interface {
-    Plugin
-    Compare(f1, f2 *Function) (float64, error)
 }
 ```
 
-### API設計
+### API Design
 
 ```go
-// pkg/api/client.go
+// Future API client structure
 type Client struct {
-    config *Config
+    config *config.Config
 }
 
 func (c *Client) AnalyzeSimilarity(targets []string) (*SimilarityResult, error)
 func (c *Client) CompareFiles(file1, file2 string) (*ComparisonResult, error)
 ```
 
-## テスト戦略
+## Security Considerations
 
-### 1. 単体テスト
+1. **Input Validation**: Comprehensive validation of all inputs and configurations
+2. **Path Traversal Protection**: Safe file path handling and validation
+3. **Resource Limits**: Memory and CPU usage bounds to prevent resource exhaustion
+4. **Error Information Disclosure**: Careful error message design to avoid information leakage
 
-- 各コンポーネントの独立テスト
-- モックを使用した依存関係の分離
-- カバレッジ目標: 80%以上
+## Scalability Design
 
-### 2. 統合テスト
+1. **Horizontal Scaling**: Worker pool scaling based on available CPU cores
+2. **Memory Efficiency**: Minimal memory footprint for large codebases
+3. **Incremental Processing**: Support for processing subsets of large projects
+4. **Configurable Limits**: Adjustable limits for various system resources
 
-- エンドツーエンドのワークフローテスト
-- 実際のGoプロジェクトを使用したテスト
-
-### 3. パフォーマンステスト
-
-- 大規模プロジェクトでのベンチマーク
-- メモリ使用量測定
-- 並列処理効率測定
-
-### 4. 回帰テスト
-
-- 既知の類似コードパターンの検証
-- アルゴリズム変更時の一貫性確認
+This architecture provides a solid foundation for reliable, high-performance code similarity detection with excellent maintainability and extensibility characteristics.
