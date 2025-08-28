@@ -10,6 +10,11 @@ import (
 	"github.com/paveg/similarity-go/internal/similarity"
 )
 
+const (
+	// MinFunctionCountForComparison is the minimum number of functions needed for comparison.
+	MinFunctionCountForComparison = 2
+)
+
 // ComparisonJob represents a pair of functions to compare.
 type ComparisonJob struct {
 	Function1 *ast.Function
@@ -46,8 +51,8 @@ func NewSimilarityWorker(detector *similarity.Detector, workers int, threshold f
 		detector:  detector,
 		workers:   workers,
 		threshold: threshold,
-		matchesCh: make(chan *similarity.Match, workers*2),
-		resultsCh: make(chan ComparisonResult, workers*2),
+		matchesCh: make(chan *similarity.Match, workers*ChannelBufferMultiplier),
+		resultsCh: make(chan ComparisonResult, workers*ChannelBufferMultiplier),
 	}
 }
 
@@ -56,12 +61,12 @@ func (sw *SimilarityWorker) FindSimilarFunctions(
 	functions []*ast.Function,
 	progressCallback func(completed, total int),
 ) ([]similarity.Match, error) {
-	if len(functions) < 2 {
+	if len(functions) < MinFunctionCountForComparison {
 		return nil, nil
 	}
 
 	// Calculate total number of comparisons
-	totalComparisons := len(functions) * (len(functions) - 1) / 2
+	totalComparisons := len(functions) * (len(functions) - 1) / MinFunctionCountForComparison
 
 	// Create jobs for all function pairs
 	jobs := make(chan ComparisonJob, totalComparisons)

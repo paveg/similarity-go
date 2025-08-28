@@ -6,6 +6,11 @@ import (
 	"sync"
 )
 
+const (
+	// ChannelBufferMultiplier determines the channel buffer size as a multiple of worker count.
+	ChannelBufferMultiplier = 2
+)
+
 // Task represents a unit of work to be processed by the worker pool.
 type Task func() error
 
@@ -38,8 +43,8 @@ func NewPool(workers int) *Pool {
 
 	return &Pool{
 		workers:  workers,
-		taskCh:   make(chan Task, workers*2), // Buffer to prevent blocking
-		resultCh: make(chan Result, workers*2),
+		taskCh:   make(chan Task, workers*ChannelBufferMultiplier), // Buffer to prevent blocking
+		resultCh: make(chan Result, workers*ChannelBufferMultiplier),
 		ctx:      ctx,
 		cancel:   cancel,
 	}

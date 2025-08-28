@@ -18,6 +18,13 @@ import (
 	"github.com/paveg/similarity-go/pkg/mathutil"
 )
 
+const (
+	// PercentageMultiplier is used to convert decimal to percentage.
+	PercentageMultiplier = 100
+	// ProgressReportingInterval defines how often progress is reported.
+	ProgressReportingInterval = 100
+)
+
 var (
 	version   = "dev"     // Will be set during build //nolint:gochecknoglobals // build-time variables
 	gitCommit = "none"    //nolint:gochecknoglobals // build-time variables
@@ -147,9 +154,9 @@ func runSimilarityCheck(args *CLIArgs, cmd *cobra.Command, targets []string) err
 		var progressCallback func(completed, total int)
 		if args.verbose {
 			progressCallback = func(completed, total int) {
-				if completed%100 == 0 || completed == total {
+				if completed%ProgressReportingInterval == 0 || completed == total {
 					_, _ = fmt.Fprintf(os.Stderr, "\r[similarity-go] Progress: %d/%d comparisons (%.1f%%)",
-						completed, total, float64(completed)/float64(total)*100)
+						completed, total, float64(completed)/float64(total)*PercentageMultiplier)
 					if completed == total {
 						_, _ = fmt.Fprintf(os.Stderr, "\n")
 					}
