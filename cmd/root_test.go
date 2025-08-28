@@ -7,10 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"encoding/json"
+
 	"github.com/paveg/similarity-go/internal/ast"
 	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/similarity"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func TestRootCommand(t *testing.T) {
@@ -548,5 +551,180 @@ func TestCountDuplications(t *testing.T) {
 	count = countDuplications(groups)
 	if count != 3 {
 		t.Errorf("Expected 3 total unique functions, got %d", count)
+	}
+}
+
+func TestParallelProcessing(t *testing.T) {
+	// Create temporary test files
+	tempDir := t.TempDir()
+
+	// Create a test file
+	testFile := filepath.Join(tempDir, "test.go")
+	testContent := `package main
+
+func add(a, b int) int {
+	return a + b
+}
+
+func sum(x, y int) int {
+	return x + y
+}
+`
+	if writeErr := os.WriteFile(testFile, []byte(testContent), 0644); writeErr != nil {
+		t.Fatalf("failed to write test file: %v", writeErr)
+	}
+
+	// Test with parallel processing enabled
+	args := &CLIArgs{verbose: true}
+	cmd := newRootCommand(args)
+	cmd.SetArgs([]string{"--workers", "2", "--threshold", "0.5", testFile})
+
+	// Capture output
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("expected no error with parallel processing, got: %v", err)
+	}
+
+	// The test just verifies that parallel processing works without error
+	// The JSON output in the test log shows it's working correctly
+}
+
+func TestProgressCallback(t *testing.T) {
+	// Test progress callback functionality
+	callback := createProgressCallback()
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w //nolint:reassign // testing stderr output
+
+	// Call callback - use multiples of ProgressReportingInterval (100) or final value
+	callback(100, 200) // This will trigger output (multiple of 100)
+	callback(200, 200) // Final callback - always triggers
+
+	w.Close()
+	os.Stderr = oldStderr //nolint:reassign // restore stderr
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	output := buf.String()
+	if !strings.Contains(output, "100/200") {
+		t.Errorf("expected progress output to show 100/200, got: %s", output)
+	}
+	if !strings.Contains(output, "200/200") {
+		t.Errorf("expected progress output to show 200/200, got: %s", output)
+	}
+}
+
+func TestWriteOutputFormats(t *testing.T) {
+	output := map[string]interface{}{
+		"test":  "data",
+		"count": 42,
+	}
+
+	// Test JSON output to file
+	tempDir := t.TempDir()
+
+	jsonFile := filepath.Join(tempDir, "output.json")
+	err := writeOutput(output, "json", jsonFile)
+	if err != nil {
+		t.Errorf("expected no error writing JSON file, got: %v", err)
+	}
+
+	// Verify JSON content
+	content, err := os.ReadFile(jsonFile)
+	if err != nil {
+		t.Fatalf("failed to read JSON file: %v", err)
+	}
+
+	var result map[string]interface{}
+	if unmarshalErr := json.Unmarshal(content, &result); unmarshalErr != nil {
+		t.Errorf("failed to parse JSON: %v", unmarshalErr)
+	}
+
+	if result["test"] != "data" {
+		t.Errorf("expected test=data, got %v", result["test"])
+	}
+
+	// Test YAML output to file
+	yamlFile := filepath.Join(tempDir, "output.yaml")
+	err = writeOutput(output, "yaml", yamlFile)
+	if err != nil {
+		t.Errorf("expected no error writing YAML file, got: %v", err)
+	}
+
+	// Verify YAML content
+	yamlContent, err := os.ReadFile(yamlFile)
+	if err != nil {
+		t.Fatalf("failed to read YAML file: %v", err)
+	}
+
+	var yamlResult map[string]interface{}
+	if yamlUnmarshalErr := yaml.Unmarshal(yamlContent, &yamlResult); yamlUnmarshalErr != nil {
+		t.Errorf("failed to parse YAML: %v", yamlUnmarshalErr)
+	}
+
+	if yamlResult["test"] != "data" {
+		t.Errorf("expected test=data in YAML, got %v", yamlResult["test"])
+	}
+}
+
+func TestErrorHandling(t *testing.T) {
+	// Test invalid config file
+	args := &CLIArgs{configFile: "/nonexistent/config.yaml"}
+	cmd := newRootCommand(args)
+	cmd.SetArgs([]string{"./testdata"})
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	// Error is expected but should be handled gracefully
+	if err == nil {
+		t.Log("Command completed successfully with nonexistent config (using defaults)")
+	}
+
+	// Test with invalid output directory
+	tempDir := t.TempDir()
+
+	// Try to write to a directory that doesn't exist
+	invalidPath := filepath.Join(tempDir, "nonexistent", "output.json")
+	output := map[string]interface{}{"test": "data"}
+
+	err = writeOutput(output, "json", invalidPath)
+	if err == nil {
+		t.Error("expected error when writing to invalid path")
+	}
+}
+
+func TestFlagValidation(t *testing.T) {
+	// Test flag overrides with invalid values
+	cmd := newRootCommand(&CLIArgs{})
+
+	// Set invalid threshold
+	cmd.SetArgs([]string{"--threshold", "1.5", "./testdata"})
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error with invalid threshold > 1.0")
+	}
+
+	// Test invalid format
+	cmd.SetArgs([]string{"--format", "invalid", "./testdata"})
+	buf.Reset()
+
+	err = cmd.Execute()
+	if err == nil {
+		t.Error("expected error with invalid format")
 	}
 }

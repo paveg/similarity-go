@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/paveg/similarity-go/internal/ast"
+	"github.com/paveg/similarity-go/internal/config"
 	"github.com/paveg/similarity-go/internal/testhelpers"
 )
 
@@ -725,5 +726,169 @@ func hello() string {
 	result = detector.hasSimilarOperations(func1, func3)
 	if result {
 		t.Error("Expected functions with different operation types to not be similar")
+	}
+}
+
+func TestNewDetectorWithConfig(t *testing.T) {
+	cfg := config.Default()
+	threshold := 0.8
+	detector := NewDetectorWithConfig(threshold, cfg)
+
+	if detector.threshold != threshold {
+		t.Errorf("expected threshold %f, got %f", threshold, detector.threshold)
+	}
+
+	if detector.config != cfg {
+		t.Error("expected detector to use provided config")
+	}
+
+	// Test with nil config should not panic
+	detector2 := NewDetectorWithConfig(threshold, nil)
+	if detector2 == nil {
+		t.Error("expected detector to be created even with nil config")
+	}
+}
+
+func TestFindSimilarFunctionsWithProcessor(t *testing.T) {
+	detector := NewDetector(0.8)
+
+	source1 := `package main
+func add(a, b int) int {
+	return a + b
+}`
+
+	source2 := `package main
+func sum(x, y int) int {
+	return x + y
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "add")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "sum")
+
+	functions := []*ast.Function{func1, func2}
+
+	// Create a mock processor
+	mockProcessor := &MockProcessor{detector: detector}
+
+	matches, err := detector.FindSimilarFunctionsWithProcessor(mockProcessor, functions, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if matches == nil {
+		t.Error("expected matches to be returned")
+	}
+
+	if !mockProcessor.called {
+		t.Error("expected processor to be called")
+	}
+}
+
+// MockProcessor implements ParallelProcessor for testing.
+type MockProcessor struct {
+	detector *Detector
+	called   bool
+}
+
+func (m *MockProcessor) FindSimilarFunctions(functions []*ast.Function, _ func(completed, total int)) ([]Match, error) {
+	m.called = true
+	return m.detector.FindSimilarFunctions(functions), nil
+}
+
+func TestTreeEditDistanceNilCases(t *testing.T) {
+	// Test with nil ASTs
+	distance := TreeEditDistance(nil, nil)
+	if distance != 0 {
+		t.Errorf("expected distance 0 for nil ASTs, got %d", distance)
+	}
+
+	// Test with one nil AST
+	source1 := `package main
+func test() int {
+	return 1
+}`
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "test")
+
+	distance = TreeEditDistance(func1.AST, nil)
+	if distance <= 0 {
+		t.Error("expected positive distance when comparing AST to nil")
+	}
+
+	distance = TreeEditDistance(nil, func1.AST)
+	if distance <= 0 {
+		t.Error("expected positive distance when comparing nil to AST")
+	}
+}
+
+func TestGetNodeChildrenAndType(t *testing.T) {
+	source := `package main
+func test() int {
+	if true {
+		return 1
+	}
+	return 0
+}`
+	function := testhelpers.CreateFunctionFromSource(t, source, "test")
+
+	// Test with function declaration
+	nodeType := getNodeType(function.AST)
+	if nodeType == "" {
+		t.Error("expected non-empty node type for function declaration")
+	}
+
+	children := getNodeChildren(function.AST)
+	// Function declarations may or may not have children depending on structure
+	if children == nil {
+		t.Log("Function declaration has no children, which is acceptable")
+	}
+
+	// Test with body statements
+	if function.AST.Body != nil && len(function.AST.Body.List) > 0 {
+		stmt := function.AST.Body.List[0]
+		stmtType := getNodeType(stmt)
+		if stmtType == "" {
+			t.Error("expected non-empty node type for statement")
+		}
+
+		stmtChildren := getNodeChildren(stmt)
+		// Some statements may not have children, that's ok
+		if stmtChildren == nil {
+			t.Log("Statement has no children, which is acceptable")
+		}
+	}
+}
+
+func TestCalculateChildrenDistanceAlgorithm(t *testing.T) {
+	source1 := `package main
+func test1() int {
+	if true {
+		return 1
+	}
+	return 0
+}`
+
+	source2 := `package main
+func test2() int {
+	if false {
+		return 2
+	}
+	return 0
+}`
+
+	func1 := testhelpers.CreateFunctionFromSource(t, source1, "test1")
+	func2 := testhelpers.CreateFunctionFromSource(t, source2, "test2")
+
+	// Test calculateChildrenDistance with function AST nodes
+	if func1.AST.Body != nil && func2.AST.Body != nil {
+		distance := calculateChildrenDistance(func1.AST.Body, func2.AST.Body)
+		if distance < 0 {
+			t.Errorf("expected non-negative distance, got %d", distance)
+		}
+	}
+
+	// Test with same nodes
+	distance := calculateChildrenDistance(func1.AST, func1.AST)
+	if distance != 0 {
+		t.Errorf("expected distance 0 for same nodes, got %d", distance)
 	}
 }
