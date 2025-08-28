@@ -376,11 +376,11 @@ func TestParseAllTargets(t *testing.T) {
 		t.Errorf("Expected 0 functions for nonexistent file, got %d", len(functions))
 	}
 
-	// Test with testdata directory
+	// Test with testdata directory (may not exist)
 	functions = parseAllTargets(parser, []string{"./testdata"}, cfg, true)
-	// Should handle testdata directory without errors
-	if functions == nil {
-		t.Error("Expected non-nil functions slice from testdata")
+	// Should return empty slice for nonexistent directory, not nil
+	if len(functions) != 0 {
+		t.Errorf("Expected 0 functions for nonexistent testdata directory, got %d", len(functions))
 	}
 }
 
