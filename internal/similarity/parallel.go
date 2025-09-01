@@ -73,39 +73,68 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 	}
 
 	// Pre-normalize all functions to avoid race conditions during parallel processing
+	normalizedFunctions := p.preNormalizeFunctions(functions)
+
+	// Set up parallel processing channels and workers
+	results := p.setupParallelProcessing(normalizedFunctions)
+
+	// Collect and process results
+	return p.collectResults(functions, results, progressCallback)
+}
+
+// preNormalizeFunctions normalizes all functions before parallel processing.
+func (p *DefaultParallelProcessor) preNormalizeFunctions(functions []*ast.Function) []*ast.Function {
 	normalizedFunctions := make([]*ast.Function, len(functions))
 	for i, fn := range functions {
 		normalizedFunctions[i] = fn.Normalize()
 	}
+	return normalizedFunctions
+}
 
+// setupParallelProcessing creates work items and starts worker goroutines.
+func (p *DefaultParallelProcessor) setupParallelProcessing(
+	normalizedFunctions []*ast.Function,
+) chan WorkResult {
 	// Calculate total number of comparisons (n*(n-1)/2)
 	const divisor = 2
 	totalComparisons := (len(normalizedFunctions) * (len(normalizedFunctions) - 1)) / divisor
 
-	// Create work items using pre-normalized functions
 	workItems := make(chan WorkItem, totalComparisons)
 	results := make(chan WorkResult, totalComparisons)
 
 	// Fill work items
-	go func() {
-		defer close(workItems)
-		for i := range normalizedFunctions {
-			for j := i + 1; j < len(normalizedFunctions); j++ {
-				select {
-				case workItems <- WorkItem{
-					Index1: i,
-					Index2: j,
-					Func1:  normalizedFunctions[i],
-					Func2:  normalizedFunctions[j],
-				}:
-				case <-p.ctx.Done():
-					return
-				}
-			}
-		}
-	}()
+	go p.generateWorkItems(normalizedFunctions, workItems)
 
 	// Start worker goroutines
+	p.startWorkers(workItems, results)
+
+	return results
+}
+
+// generateWorkItems fills the work items channel with function pairs.
+func (p *DefaultParallelProcessor) generateWorkItems(
+	normalizedFunctions []*ast.Function,
+	workItems chan WorkItem,
+) {
+	defer close(workItems)
+	for i := range normalizedFunctions {
+		for j := i + 1; j < len(normalizedFunctions); j++ {
+			select {
+			case workItems <- WorkItem{
+				Index1: i,
+				Index2: j,
+				Func1:  normalizedFunctions[i],
+				Func2:  normalizedFunctions[j],
+			}:
+			case <-p.ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+// startWorkers starts the worker goroutines.
+func (p *DefaultParallelProcessor) startWorkers(workItems <-chan WorkItem, results chan<- WorkResult) {
 	var wg sync.WaitGroup
 	for range p.workerCount {
 		wg.Add(1)
@@ -120,8 +149,18 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 		wg.Wait()
 		close(results)
 	}()
+}
 
-	// Collect results with progress tracking
+// collectResults collects and processes results from workers.
+func (p *DefaultParallelProcessor) collectResults(
+	originalFunctions []*ast.Function,
+	results <-chan WorkResult,
+	progressCallback func(completed, total int),
+) ([]Match, error) {
+	// Calculate total comparisons for progress tracking
+	const divisor = 2
+	totalComparisons := (len(originalFunctions) * (len(originalFunctions) - 1)) / divisor
+
 	var matches []Match
 	var matchesMutex sync.Mutex
 	var completed int64
@@ -134,8 +173,8 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 		if p.detector.IsAboveThreshold(result.Similarity) {
 			matchesMutex.Lock()
 			matches = append(matches, Match{
-				Function1:  functions[result.Index1], // Use original functions in result
-				Function2:  functions[result.Index2], // Use original functions in result
+				Function1:  originalFunctions[result.Index1], // Use original functions in result
+				Function2:  originalFunctions[result.Index2], // Use original functions in result
 				Similarity: result.Similarity,
 			})
 			matchesMutex.Unlock()

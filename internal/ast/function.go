@@ -194,7 +194,7 @@ func (f *Function) Normalize() *Function {
 	}
 }
 
-// DeepCopy creates a deep copy of the Function with an independent AST
+// DeepCopy creates a deep copy of the Function with an independent AST.
 func (f *Function) DeepCopy() *Function {
 	if f == nil {
 		return nil
