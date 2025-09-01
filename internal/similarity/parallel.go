@@ -72,25 +72,31 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 		return []Match{}, nil
 	}
 
+	// Pre-normalize all functions to avoid race conditions during parallel processing
+	normalizedFunctions := make([]*ast.Function, len(functions))
+	for i, fn := range functions {
+		normalizedFunctions[i] = fn.Normalize()
+	}
+
 	// Calculate total number of comparisons (n*(n-1)/2)
 	const divisor = 2
-	totalComparisons := (len(functions) * (len(functions) - 1)) / divisor
+	totalComparisons := (len(normalizedFunctions) * (len(normalizedFunctions) - 1)) / divisor
 
-	// Create work items
+	// Create work items using pre-normalized functions
 	workItems := make(chan WorkItem, totalComparisons)
 	results := make(chan WorkResult, totalComparisons)
 
 	// Fill work items
 	go func() {
 		defer close(workItems)
-		for i := range functions {
-			for j := i + 1; j < len(functions); j++ {
+		for i := range normalizedFunctions {
+			for j := i + 1; j < len(normalizedFunctions); j++ {
 				select {
 				case workItems <- WorkItem{
 					Index1: i,
 					Index2: j,
-					Func1:  functions[i],
-					Func2:  functions[j],
+					Func1:  normalizedFunctions[i],
+					Func2:  normalizedFunctions[j],
 				}:
 				case <-p.ctx.Done():
 					return
@@ -117,6 +123,7 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 
 	// Collect results with progress tracking
 	var matches []Match
+	var matchesMutex sync.Mutex
 	var completed int64
 
 	for result := range results {
@@ -125,11 +132,13 @@ func (p *DefaultParallelProcessor) FindSimilarFunctions(
 		}
 
 		if p.detector.IsAboveThreshold(result.Similarity) {
+			matchesMutex.Lock()
 			matches = append(matches, Match{
-				Function1:  result.Func1,
-				Function2:  result.Func2,
+				Function1:  functions[result.Index1], // Use original functions in result
+				Function2:  functions[result.Index2], // Use original functions in result
 				Similarity: result.Similarity,
 			})
+			matchesMutex.Unlock()
 		}
 
 		// Update progress atomically
@@ -160,7 +169,8 @@ func (p *DefaultParallelProcessor) worker(workItems <-chan WorkItem, results cha
 		default:
 		}
 
-		// Calculate similarity
+		// Calculate similarity using pre-normalized functions
+		// No need for deep copying since functions are already normalized
 		similarity := p.detector.CalculateSimilarity(item.Func1, item.Func2)
 
 		// Send result
