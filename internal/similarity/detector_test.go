@@ -502,6 +502,253 @@ func simple() {
 	}
 }
 
+// TestDetector_CountASTNodesComprehensive tests all AST node types in countASTNodes.
+func TestDetector_CountASTNodesComprehensive(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	tests := []struct {
+		name     string
+		source   string
+		minCount int
+		desc     string
+	}{
+		{
+			name: "simple assignment",
+			source: `package main
+func test() {
+	x := 42
+}`,
+			minCount: 3, // FuncDecl + BlockStmt + AssignStmt + ...
+			desc:     "simple assignment should count multiple nodes",
+		},
+		{
+			name: "binary expression",
+			source: `package main
+func test() {
+	result := a + b
+}`,
+			minCount: 5, // FuncDecl + BlockStmt + AssignStmt + BinaryExpr + operands
+			desc:     "binary expressions should count operands",
+		},
+		{
+			name: "unary expression",
+			source: `package main
+func test() {
+	result := !flag
+}`,
+			minCount: 4, // FuncDecl + BlockStmt + AssignStmt + UnaryExpr + operand
+			desc:     "unary expressions should count operand",
+		},
+		{
+			name: "function call",
+			source: `package main
+func test() {
+	result := myFunc(a, b, c)
+}`,
+			minCount: 7, // FuncDecl + BlockStmt + AssignStmt + CallExpr + Fun + 3 Args
+			desc:     "function calls should count function and all arguments",
+		},
+		{
+			name: "return statement",
+			source: `package main
+func test() int {
+	return a + b
+}`,
+			minCount: 5, // FuncDecl + BlockStmt + ReturnStmt + BinaryExpr + operands
+			desc:     "return statements should count return values",
+		},
+		{
+			name: "multiple assignment",
+			source: `package main
+func test() {
+	x, y := a + b, c * d
+}`,
+			minCount: 9, // FuncDecl + BlockStmt + AssignStmt + 2 lhs + 2 rhs (each with ops)
+			desc:     "multiple assignments should count all sides",
+		},
+		{
+			name: "expression statement",
+			source: `package main
+func test() {
+	fmt.Println("hello")
+}`,
+			minCount: 4, // FuncDecl + BlockStmt + ExprStmt + CallExpr + ...
+			desc:     "expression statements should count the expression",
+		},
+		{
+			name: "if statement with init",
+			source: `package main
+func test() {
+	if x := getValue(); x > 0 {
+		doSomething()
+	}
+}`,
+			minCount: 8, // FuncDecl + BlockStmt + IfStmt + Init + Cond + Body + ...
+			desc:     "if statements should count init, condition, and body",
+		},
+		{
+			name: "if statement with else",
+			source: `package main
+func test() {
+	if condition {
+		doThis()
+	} else {
+		doThat()
+	}
+}`,
+			minCount: 7, // FuncDecl + BlockStmt + IfStmt + Cond + Body + Else + ...
+			desc:     "if statements with else should count else branch",
+		},
+		{
+			name: "for loop with all components",
+			source: `package main
+func test() {
+	for i := 0; i < 10; i++ {
+		doWork()
+	}
+}`,
+			minCount: 10, // FuncDecl + BlockStmt + ForStmt + Init + Cond + Post + Body + ...
+			desc:     "for loops should count init, condition, post, and body",
+		},
+		{
+			name: "nested structures",
+			source: `package main
+func test() {
+	if x > 0 {
+		for i := 0; i < x; i++ {
+			if i%2 == 0 {
+				result += i
+			}
+		}
+	}
+}`,
+			minCount: 15, // Deeply nested structures should have high node count
+			desc:     "nested structures should count all nested nodes",
+		},
+		{
+			name: "complex expression",
+			source: `package main
+func test() {
+	result := ((a + b) * c) / (d - e) + f
+}`,
+			minCount: 8, // Complex nested binary operations
+			desc:     "complex expressions should count all sub-expressions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			function := testhelpers.CreateFunctionFromSource(t, tt.source, "test")
+			if function == nil || function.AST == nil {
+				t.Fatal("Failed to create function from source")
+			}
+
+			count := detector.countASTNodes(function.AST)
+			if count < tt.minCount {
+				t.Errorf("%s: expected at least %d nodes, got %d",
+					tt.desc, tt.minCount, count)
+			}
+
+			// Count should be positive for any valid AST
+			if count <= 0 {
+				t.Errorf("Node count should be positive, got %d", count)
+			}
+		})
+	}
+}
+
+// TestDetector_CountASTNodesEdgeCases tests edge cases and unsupported node types.
+func TestDetector_CountASTNodesEdgeCases(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	tests := []struct {
+		name     string
+		setup    func() goast.Node
+		expected int
+		desc     string
+	}{
+		{
+			name: "nil node",
+			setup: func() goast.Node {
+				return nil
+			},
+			expected: 0,
+			desc:     "nil nodes should return 0",
+		},
+		{
+			name: "unsupported node type",
+			setup: func() goast.Node {
+				return &goast.Ident{Name: "test"}
+			},
+			expected: 1,
+			desc:     "unsupported node types should return 1 (just the node itself)",
+		},
+		{
+			name: "empty block statement",
+			setup: func() goast.Node {
+				return &goast.BlockStmt{List: []goast.Stmt{}}
+			},
+			expected: 1,
+			desc:     "empty block statements should return 1",
+		},
+		{
+			name: "function with nil body",
+			setup: func() goast.Node {
+				return &goast.FuncDecl{
+					Name: &goast.Ident{Name: "test"},
+					Type: &goast.FuncType{},
+					Body: nil, // nil body
+				}
+			},
+			expected: 2,
+			desc:     "function with nil body should handle gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := tt.setup()
+			count := detector.countASTNodes(node)
+			if count != tt.expected {
+				t.Errorf("%s: expected %d, got %d", tt.desc, tt.expected, count)
+			}
+		})
+	}
+}
+
+// TestDetector_CountASTNodesConsistency tests that counting is consistent.
+func TestDetector_CountASTNodesConsistency(t *testing.T) {
+	detector := NewDetector(0.5)
+
+	source := `package main
+func test() {
+	x := a + b
+	if x > 0 {
+		return x * 2
+	}
+	return 0
+}`
+
+	function := testhelpers.CreateFunctionFromSource(t, source, "test")
+	if function == nil || function.AST == nil {
+		t.Fatal("Failed to create function")
+	}
+
+	// Count multiple times to ensure consistency
+	count1 := detector.countASTNodes(function.AST)
+	count2 := detector.countASTNodes(function.AST)
+	count3 := detector.countASTNodes(function.AST)
+
+	if count1 != count2 || count2 != count3 {
+		t.Errorf("Node counting should be consistent: %d, %d, %d", count1, count2, count3)
+	}
+
+	// Count should be reasonable for this structure
+	if count1 < 5 || count1 > 50 {
+		t.Errorf("Node count %d seems unreasonable for this function", count1)
+	}
+}
+
 func TestDetector_CalculateStructuralSimilarity(t *testing.T) {
 	detector := NewDetector(0.5)
 

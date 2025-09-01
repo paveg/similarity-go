@@ -181,17 +181,42 @@ func (f *Function) Normalize() *Function {
 	// Create a deep copy of the AST and normalize it
 	normalizedAST := f.deepCopyFuncDecl(f.AST)
 	f.normalizeNode(normalizedAST)
-	f.Normalized = normalizedAST
 
+	// Return a new Function without modifying the original
 	return &Function{
 		Name:       f.Name,
 		File:       f.File,
 		StartLine:  f.StartLine,
 		EndLine:    f.EndLine,
-		AST:        f.Normalized,
-		Normalized: f.Normalized,
+		AST:        normalizedAST,
+		Normalized: normalizedAST,
 		LineCount:  f.LineCount,
 	}
+}
+
+// DeepCopy creates a deep copy of the Function with an independent AST.
+func (f *Function) DeepCopy() *Function {
+	if f == nil {
+		return nil
+	}
+
+	// Create new function with deep copied AST
+	copied := &Function{
+		Name:      f.Name,
+		File:      f.File,
+		StartLine: f.StartLine,
+		EndLine:   f.EndLine,
+		AST:       nil,
+		LineCount: f.LineCount,
+		// Don't copy Normalized field - let normalization happen independently
+	}
+
+	// Deep copy AST if it exists
+	if f.AST != nil {
+		copied.AST = f.deepCopyFuncDecl(f.AST)
+	}
+
+	return copied
 }
 
 // deepCopyFuncDecl creates a deep copy of a FuncDecl.
@@ -200,12 +225,15 @@ func (f *Function) deepCopyFuncDecl(original *ast.FuncDecl) *ast.FuncDecl {
 		return nil
 	}
 
-	// Create new function declaration
+	// Create new function declaration with deep copies of all fields
 	copied := &ast.FuncDecl{
-		Doc:  original.Doc,
-		Recv: original.Recv,
-		Name: original.Name,
-		Type: original.Type,
+		Doc:  original.Doc,  // Doc comments are typically not modified
+		Recv: original.Recv, // Receiver is typically not modified
+		Name: &ast.Ident{
+			Name: original.Name.Name,
+			Obj:  original.Name.Obj, // Object reference can be shared
+		},
+		Type: original.Type, // Function type is typically not modified
 		Body: f.deepCopyBlockStmt(original.Body),
 	}
 
