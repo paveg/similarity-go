@@ -182,6 +182,7 @@ Default algorithm weights:
 - Token Similarity: 30%
 - Structural Analysis: 25%
 - Signature Matching: 15%
+- Different Signature Penalty: 30% (applied when function signatures diverge)
 
 ## Contributing
 
@@ -215,6 +216,7 @@ similarity:
     token_similarity: 0.3
     structural: 0.25
     signature: 0.15
+    different_signature: 0.3
   limits:
     max_cache_size: 10000
     max_line_difference_ratio: 3.0
