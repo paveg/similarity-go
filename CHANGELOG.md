@@ -37,8 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial public release of the similarity detection CLI with multi-factor
   AST analysis, directory scanning, and parallel processing support.
-- Automated release packaging for Homebrew, Arch, Debian, RPM, macOS, Windows,
-  and Android distributions via GitHub Actions.
+- Automated release packaging for Arch, Debian, RPM, macOS, Windows, and
+  Android distributions via GitHub Actions.
 
 ### Fixed
 

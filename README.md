@@ -31,13 +31,6 @@ go install github.com/paveg/similarity-go/cmd/similarity-go@latest
 
 This will install the binary to your `$GOPATH/bin` or `$GOBIN` directory.
 
-### Using Homebrew (macOS/Linux)
-
-```bash
-brew tap paveg/tap
-brew install similarity-go
-```
-
 ### Download Binary
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/paveg/similarity-go/releases/latest).
