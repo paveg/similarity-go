@@ -73,22 +73,6 @@ changelog:
     - title: 'Other Changes'
       order: 999
 
-brews:
-  - repository:
-      owner: paveg
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    folder: Formula
-    goarm: 6
-    homepage: https://github.com/paveg/similarity-go
-    description: High-performance Go code similarity detection CLI tool using multi-factor AST analysis
-    license: MIT
-    test: |
-      system "#{bin}/similarity-go --version"
-    dependencies:
-      - name: go
-        type: optional
-
 nfpms:
   - file_name_template: '{{ .ConventionalFileName }}'
     id: packages
@@ -170,26 +154,20 @@ release:
   mode: append
   header: |
     ## similarity-go {{ .Tag }} ({{ .Date }})
-    
+
     A high-performance Go code similarity detection CLI tool that uses multi-factor AST analysis.
-    
+
   footer: |
     ## Installation
-    
+
     ### Using Go Install
     ```bash
     go install github.com/paveg/similarity-go/cmd/similarity-go@{{ .Tag }}
     ```
-    
-    ### Using Homebrew
-    ```bash
-    brew tap paveg/tap
-    brew install similarity-go
-    ```
-    
+
     ### Download Binary
     Download the appropriate binary for your platform from the assets below.
-    
+
     ---
-    
+
     **Full Changelog**: https://github.com/paveg/similarity-go/compare/{{ .PreviousTag }}...{{ .Tag }}
