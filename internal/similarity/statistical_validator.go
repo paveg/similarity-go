@@ -3,10 +3,22 @@ package similarity
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"testing"
 
 	"github.com/paveg/similarity-go/internal/config"
+)
+
+const (
+	highSimilarityThreshold    = 0.7
+	spearmanMultiplier         = 6.0
+	percentileTwentyFive       = 0.25
+	percentileFifty            = 0.5
+	percentileSeventyFive      = 0.75
+	kurtosisAdjustment         = 3.0
+	minSamplesForRanking       = 2
+	defaultDiscriminationScore = 0.5
 )
 
 // StatisticalValidator provides comprehensive statistical analysis for similarity algorithms.
@@ -120,8 +132,8 @@ func (sv *StatisticalValidator) convertToDetailedResults(basicResults []CaseResu
 			AbsoluteError:       basic.Error,
 			RelativeError:       sv.calculateRelativeError(basic.Expected, basic.Actual),
 			SquaredError:        basic.Error * basic.Error,
-			IsHighSimilarity:    basic.Expected >= 0.7,
-			PredictedHigh:       basic.Actual >= 0.7,
+			IsHighSimilarity:    basic.Expected >= highSimilarityThreshold,
+			PredictedHigh:       basic.Actual >= highSimilarityThreshold,
 			CorrectlyClassified: sv.isCorrectlyClassified(basic.Expected, basic.Actual),
 		}
 	}
@@ -206,7 +218,7 @@ func (sv *StatisticalValidator) calculateBasicMetrics(result *ValidationResult) 
 // calculateSpearmanRho computes Spearman rank correlation coefficient.
 func (sv *StatisticalValidator) calculateSpearmanRho(results []DetailedCaseResult) float64 {
 	n := len(results)
-	if n < 2 {
+	if n < minSamplesForRanking {
 		return 0
 	}
 
@@ -221,7 +233,7 @@ func (sv *StatisticalValidator) calculateSpearmanRho(results []DetailedCaseResul
 		sumSquaredDiffs += diff * diff
 	}
 
-	rho := 1.0 - (6.0*sumSquaredDiffs)/(float64(n*(n*n-1)))
+	rho := 1.0 - (spearmanMultiplier*sumSquaredDiffs)/(float64(n*(n*n-1)))
 	return rho
 }
 
@@ -259,7 +271,7 @@ func (sv *StatisticalValidator) getRanks(
 			j++
 		}
 		// Assign average rank to tied group
-		avgRank := float64(i+j+1) / 2.0 // +1 for 1-based ranking
+		avgRank := float64(i+j+1) / float64(minSamplesForRanking) // +1 for 1-based ranking
 		for k := i; k < j; k++ {
 			ranks[pairs[k].index] = avgRank
 		}
@@ -274,13 +286,14 @@ func (sv *StatisticalValidator) calculateClassificationMetrics(result *Validatio
 	var tp, fp, fn, tn int
 
 	for _, r := range result.CaseResults {
-		if r.IsHighSimilarity && r.PredictedHigh {
+		switch {
+		case r.IsHighSimilarity && r.PredictedHigh:
 			tp++
-		} else if !r.IsHighSimilarity && r.PredictedHigh {
+		case !r.IsHighSimilarity && r.PredictedHigh:
 			fp++
-		} else if r.IsHighSimilarity && !r.PredictedHigh {
+		case r.IsHighSimilarity && !r.PredictedHigh:
 			fn++
-		} else {
+		default:
 			tn++
 		}
 	}
@@ -343,17 +356,17 @@ func (sv *StatisticalValidator) calculateDistributionStats(result *ValidationRes
 
 	if stdDev > 0 {
 		skewness = (skewness / n) / (stdDev * stdDev * stdDev)
-		kurtosis = (kurtosis/n)/(variance*variance) - 3.0 // Excess kurtosis
+		kurtosis = (kurtosis/n)/(variance*variance) - kurtosisAdjustment // Excess kurtosis
 	}
 
 	result.ErrorDistribution = ErrorDistributionStats{
 		Mean:     mean,
-		Median:   sv.percentile(sortedErrors, 0.5),
+		Median:   sv.percentile(sortedErrors, percentileFifty),
 		StdDev:   stdDev,
 		Skewness: skewness,
 		Kurtosis: kurtosis,
-		Q25:      sv.percentile(sortedErrors, 0.25),
-		Q75:      sv.percentile(sortedErrors, 0.75),
+		Q25:      sv.percentile(sortedErrors, percentileTwentyFive),
+		Q75:      sv.percentile(sortedErrors, percentileSeventyFive),
 	}
 
 	result.ErrorDistribution.IQR = result.ErrorDistribution.Q75 - result.ErrorDistribution.Q25
@@ -439,7 +452,7 @@ func (sv *StatisticalValidator) calculateStatsForGroup(category string, cases []
 		Category:     category,
 		Count:        len(cases),
 		MeanError:    meanError,
-		MedianError:  sv.percentile(errors, 0.5),
+		MedianError:  sv.percentile(errors, percentileFifty),
 		StdDevError:  math.Sqrt(variance),
 		MeanActual:   sumActual / float64(len(cases)),
 		MeanExpected: sumExpected / float64(len(cases)),
@@ -484,7 +497,7 @@ func (sv *StatisticalValidator) calculateConsistencyScore(results []DetailedCase
 			}
 		}
 
-		if len(cases) >= 2 {
+		if len(cases) >= minSamplesForRanking {
 			// Calculate variance in this range
 			var sum, sumSquared float64
 			for _, c := range cases {
@@ -506,7 +519,7 @@ func (sv *StatisticalValidator) calculateConsistencyScore(results []DetailedCase
 		return 1.0 / (1.0 + avgVariance) // Higher score for lower variance
 	}
 
-	return 0.5 // Default score when insufficient data
+	return defaultDiscriminationScore // Default score when insufficient data
 }
 
 // calculateDiscriminationScore measures ability to distinguish different similarity levels.
@@ -517,7 +530,7 @@ func (sv *StatisticalValidator) calculateDiscriminationScore(results []DetailedC
 	concordant := 0
 	total := 0
 
-	for i := range len(results) {
+	for i := range results {
 		for j := i + 1; j < len(results); j++ {
 			r1, r2 := results[i], results[j]
 
@@ -537,59 +550,58 @@ func (sv *StatisticalValidator) calculateDiscriminationScore(results []DetailedC
 		return float64(concordant) / float64(total)
 	}
 
-	return 0.5 // Random discrimination
+	return defaultDiscriminationScore // Random discrimination
 }
 
 // PrintValidationReport prints a comprehensive validation report.
 func (sv *StatisticalValidator) PrintValidationReport(result ValidationResult) {
-	fmt.Printf("\n=== STATISTICAL VALIDATION REPORT ===\n")
+	out := os.Stdout
+	write := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(out, format, args...)
+	}
 
-	// Basic metrics
-	fmt.Printf("\n--- ERROR METRICS ---\n")
-	fmt.Printf("Mean Absolute Error (MAE):    %.6f\n", result.MAE)
-	fmt.Printf("Mean Squared Error (MSE):     %.6f\n", result.MSE)
-	fmt.Printf("Root Mean Squared Error:      %.6f\n", result.RMSE)
-	fmt.Printf("R² (Coefficient of Det.):     %.6f\n", result.R2)
+	write("\n=== STATISTICAL VALIDATION REPORT ===\n")
 
-	fmt.Printf("\n--- CORRELATION METRICS ---\n")
-	fmt.Printf("Pearson Correlation (r):      %.6f\n", result.PearsonR)
-	fmt.Printf("Spearman Rank Correlation:    %.6f\n", result.SpearmanRho)
+	write("\n--- ERROR METRICS ---\n")
+	write("Mean Absolute Error (MAE):    %.6f\n", result.MAE)
+	write("Mean Squared Error (MSE):     %.6f\n", result.MSE)
+	write("Root Mean Squared Error:      %.6f\n", result.RMSE)
+	write("R² (Coefficient of Det.):     %.6f\n", result.R2)
 
-	// Classification metrics
-	fmt.Printf("\n--- CLASSIFICATION METRICS ---\n")
-	fmt.Printf("Precision (High Sim):         %.6f\n", result.Precision)
-	fmt.Printf("Recall (High Sim):            %.6f\n", result.Recall)
-	fmt.Printf("F1 Score:                     %.6f\n", result.F1Score)
-	fmt.Printf("Accuracy:                     %.6f\n", result.Accuracy)
+	write("\n--- CORRELATION METRICS ---\n")
+	write("Pearson Correlation (r):      %.6f\n", result.PearsonR)
+	write("Spearman Rank Correlation:    %.6f\n", result.SpearmanRho)
 
-	// Error distribution
-	fmt.Printf("\n--- ERROR DISTRIBUTION ---\n")
+	write("\n--- CLASSIFICATION METRICS ---\n")
+	write("Precision (High Sim):         %.6f\n", result.Precision)
+	write("Recall (High Sim):            %.6f\n", result.Recall)
+	write("F1 Score:                     %.6f\n", result.F1Score)
+	write("Accuracy:                     %.6f\n", result.Accuracy)
+
+	write("\n--- ERROR DISTRIBUTION ---\n")
 	dist := result.ErrorDistribution
-	fmt.Printf("Mean Error:                   %.6f\n", dist.Mean)
-	fmt.Printf("Median Error:                 %.6f\n", dist.Median)
-	fmt.Printf("Std Dev Error:                %.6f\n", dist.StdDev)
-	fmt.Printf("Skewness:                     %.6f\n", dist.Skewness)
-	fmt.Printf("Kurtosis:                     %.6f\n", dist.Kurtosis)
-	fmt.Printf("25th Percentile:              %.6f\n", dist.Q25)
-	fmt.Printf("75th Percentile:              %.6f\n", dist.Q75)
-	fmt.Printf("IQR:                          %.6f\n", dist.IQR)
+	write("Mean Error:                   %.6f\n", dist.Mean)
+	write("Median Error:                 %.6f\n", dist.Median)
+	write("Std Dev Error:                %.6f\n", dist.StdDev)
+	write("Skewness:                     %.6f\n", dist.Skewness)
+	write("Kurtosis:                     %.6f\n", dist.Kurtosis)
+	write("25th Percentile:              %.6f\n", dist.Q25)
+	write("75th Percentile:              %.6f\n", dist.Q75)
+	write("IQR:                          %.6f\n", dist.IQR)
 
-	// Robustness metrics
-	fmt.Printf("\n--- ROBUSTNESS METRICS ---\n")
-	fmt.Printf("Robustness Score:             %.6f\n", result.RobustnessScore)
-	fmt.Printf("Consistency Score:            %.6f\n", result.ConsistencyScore)
-	fmt.Printf("Discrimination Score:         %.6f\n", result.DiscriminationScore)
+	write("\n--- ROBUSTNESS METRICS ---\n")
+	write("Robustness Score:             %.6f\n", result.RobustnessScore)
+	write("Consistency Score:            %.6f\n", result.ConsistencyScore)
+	write("Discrimination Score:         %.6f\n", result.DiscriminationScore)
 
-	// Category performance
-	fmt.Printf("\n--- CATEGORY PERFORMANCE ---\n")
-	fmt.Printf("Category        Count  Mean Err  Med Err  Std Err\n")
+	write("\n--- CATEGORY PERFORMANCE ---\n")
+	write("Category        Count  Mean Err  Med Err  Std Err\n")
 	for category, stats := range result.CategoryPerformance {
-		fmt.Printf("%-14s  %5d  %8.4f  %7.4f  %7.4f\n",
+		write("%-14s  %5d  %8.4f  %7.4f  %7.4f\n",
 			category, stats.Count, stats.MeanError, stats.MedianError, stats.StdDevError)
 	}
 
-	// Worst performing cases
-	fmt.Printf("\n--- TOP 3 WORST CASES ---\n")
+	write("\n--- TOP 3 WORST CASES ---\n")
 	sorted := make([]DetailedCaseResult, len(result.CaseResults))
 	copy(sorted, result.CaseResults)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -598,8 +610,8 @@ func (sv *StatisticalValidator) PrintValidationReport(result ValidationResult) {
 
 	for i := 0; i < 3 && i < len(sorted); i++ {
 		caseResult := sorted[i]
-		fmt.Printf("%d. %s (%s)\n", i+1, caseResult.CaseName, caseResult.Category)
-		fmt.Printf("   Expected: %.3f, Actual: %.3f, Error: %.3f\n",
+		write("%d. %s (%s)\n", i+1, caseResult.CaseName, caseResult.Category)
+		write("   Expected: %.3f, Actual: %.3f, Error: %.3f\n",
 			caseResult.Expected, caseResult.Actual, caseResult.AbsoluteError)
 	}
 }

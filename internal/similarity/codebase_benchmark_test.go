@@ -118,7 +118,7 @@ func TestCodebaseBenchmark_estimateComplexity(t *testing.T) {
 					break
 				}
 			}`,
-			expected: 6, // Base + if + for + if + switch + 2 cases
+			expected: 7, // Base + if + for + if + switch + 2 cases
 		},
 	}
 
@@ -273,6 +273,7 @@ func TestCodebaseBenchmark_calculateDuplicationMetrics(t *testing.T) {
 	}
 }
 
+//nolint:gocognit // extensive assertions for multiple scenarios
 func TestCodebaseBenchmark_extractFunctionsFromFile(t *testing.T) {
 	benchmark := NewCodebaseBenchmark([]string{"/test"})
 	benchmark.SetParameters(3, 1000, nil) // Minimum 3 lines
@@ -572,9 +573,9 @@ func function%d() {
 
 	b.ResetTimer()
 	for range b.N {
-		_, err := benchmark.extractFunctionsFromFile(testFile)
-		if err != nil {
-			b.Fatalf("extractFunctionsFromFile failed: %v", err)
+		_, extractErr := benchmark.extractFunctionsFromFile(testFile)
+		if extractErr != nil {
+			b.Fatalf("extractFunctionsFromFile failed: %v", extractErr)
 		}
 	}
 }

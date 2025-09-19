@@ -129,6 +129,7 @@ func TestStatisticalValidator_getRanks(t *testing.T) {
 	}
 }
 
+//nolint:gocognit,gocyclo,cyclop // comprehensive validation across multiple metrics
 func TestStatisticalValidator_ValidateWeights(t *testing.T) {
 	validator := NewStatisticalValidator()
 
@@ -405,9 +406,36 @@ func TestStatisticalValidator_calculateStatsForGroup(t *testing.T) {
 	validator := NewStatisticalValidator()
 
 	cases := []DetailedCaseResult{
-		{CaseResult: CaseResult{CaseName: "case1", Expected: 0.8, Actual: 0.7, Error: 0.1, Category: "test"}},
-		{CaseResult: CaseResult{CaseName: "case2", Expected: 0.9, Actual: 0.8, Error: 0.1, Category: "test"}},
-		{CaseResult: CaseResult{CaseName: "case3", Expected: 0.7, Actual: 0.5, Error: 0.2, Category: "test"}},
+		{
+			CaseResult: CaseResult{
+				CaseName: "case1",
+				Expected: 0.8,
+				Actual:   0.7,
+				Error:    0.1,
+				Category: "test",
+			},
+			AbsoluteError: 0.1,
+		},
+		{
+			CaseResult: CaseResult{
+				CaseName: "case2",
+				Expected: 0.9,
+				Actual:   0.8,
+				Error:    0.1,
+				Category: "test",
+			},
+			AbsoluteError: 0.1,
+		},
+		{
+			CaseResult: CaseResult{
+				CaseName: "case3",
+				Expected: 0.7,
+				Actual:   0.5,
+				Error:    0.2,
+				Category: "test",
+			},
+			AbsoluteError: 0.2,
+		},
 	}
 
 	stats := validator.calculateStatsForGroup("test", cases)

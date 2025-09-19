@@ -2,10 +2,27 @@ package similarity
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"os"
 	"testing"
 
 	"github.com/paveg/similarity-go/internal/config"
+)
+
+const (
+	gridSearchStep          = 0.05
+	treeEditMin             = 0.1
+	treeEditMax             = 0.5
+	tokenSimilarityMin      = 0.1
+	tokenSimilarityMax      = 0.5
+	structuralMin           = 0.1
+	structuralMax           = 0.4
+	signatureMin            = 0.05
+	signatureMax            = 0.3
+	weightSumTolerance      = 0.01
+	percentageMultiplier100 = 100.0
+	maxWorstCasesToReport   = 5
 )
 
 // WeightOptimizer optimizes similarity algorithm weights using benchmark data.
@@ -42,7 +59,7 @@ func (wo *WeightOptimizer) EvaluateWeights(t *testing.T, weights config.Similari
 	// Create detector with given weights
 	cfg := config.Default()
 	cfg.Similarity.Weights = weights
-	detector := NewDetector(0.8)
+	detector := NewDetector(config.DefaultThreshold)
 	detector.config = cfg
 
 	var totalError float64
@@ -52,14 +69,14 @@ func (wo *WeightOptimizer) EvaluateWeights(t *testing.T, weights config.Similari
 		func1, func2 := testCase.CreateFunctionPair(t)
 
 		actualSimilarity := detector.CalculateSimilarity(func1, func2)
-		error := math.Abs(actualSimilarity - testCase.ExpectedSimilarity)
-		totalError += error
+		absError := math.Abs(actualSimilarity - testCase.ExpectedSimilarity)
+		totalError += absError
 
 		results = append(results, CaseResult{
 			CaseName: testCase.Name,
 			Expected: testCase.ExpectedSimilarity,
 			Actual:   actualSimilarity,
-			Error:    error,
+			Error:    absError,
 			Category: testCase.Category,
 		})
 	}
@@ -79,16 +96,13 @@ func (wo *WeightOptimizer) GridSearchOptimize(t *testing.T) OptimizationResult {
 	var bestResults []CaseResult
 	iterationCount := 0
 
-	// Define search space (step size 0.05 for reasonable granularity)
-	step := 0.05
-
-	for treeEdit := 0.1; treeEdit <= 0.5; treeEdit += step {
-		for tokenSim := 0.1; tokenSim <= 0.5; tokenSim += step {
-			for structural := 0.1; structural <= 0.4; structural += step {
-				for signature := 0.05; signature <= 0.3; signature += step {
+	for treeEdit := treeEditMin; treeEdit <= treeEditMax; treeEdit += gridSearchStep {
+		for tokenSim := tokenSimilarityMin; tokenSim <= tokenSimilarityMax; tokenSim += gridSearchStep {
+			for structural := structuralMin; structural <= structuralMax; structural += gridSearchStep {
+				for signature := signatureMin; signature <= signatureMax; signature += gridSearchStep {
 					// Ensure weights sum to approximately 1.0
 					total := treeEdit + tokenSim + structural + signature
-					if math.Abs(total-1.0) > 0.01 {
+					if math.Abs(total-1.0) > weightSumTolerance {
 						continue
 					}
 
@@ -97,7 +111,7 @@ func (wo *WeightOptimizer) GridSearchOptimize(t *testing.T) OptimizationResult {
 						TokenSimilarity:    tokenSim,
 						Structural:         structural,
 						Signature:          signature,
-						DifferentSignature: 0.3, // Keep penalty constant
+						DifferentSignature: config.DifferentSignatureWeight, // Keep penalty constant
 					}
 
 					score, results := wo.EvaluateWeights(t, weights)
@@ -136,33 +150,40 @@ func (wo *WeightOptimizer) AnalyzeCurrentWeights(t *testing.T) (float64, []CaseR
 
 // PrintOptimizationReport prints a detailed report of optimization results.
 func (wo *WeightOptimizer) PrintOptimizationReport(result OptimizationResult, currentScore float64) {
-	fmt.Printf("\n=== WEIGHT OPTIMIZATION REPORT ===\n")
-	fmt.Printf("Total iterations: %d\n", result.IterationCount)
-	fmt.Printf("Current weights score: %.4f\n", currentScore)
-	fmt.Printf("Best optimized score: %.4f\n", result.BestScore)
-	fmt.Printf("Improvement: %.4f (%.2f%%)\n",
-		result.BestScore-currentScore,
-		(result.BestScore-currentScore)/currentScore*100)
+	wo.printOptimizationReport(os.Stdout, result, currentScore)
+}
 
-	fmt.Printf("\n--- CURRENT vs OPTIMIZED WEIGHTS ---\n")
-	fmt.Printf("Algorithm        Current  Optimized  Change\n")
-	fmt.Printf("TreeEdit         %.3f    %.3f      %+.3f\n",
+func (wo *WeightOptimizer) printOptimizationReport(out io.Writer, result OptimizationResult, currentScore float64) {
+	write := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(out, format, args...)
+	}
+
+	write("\n=== WEIGHT OPTIMIZATION REPORT ===\n")
+	write("Total iterations: %d\n", result.IterationCount)
+	write("Current weights score: %.4f\n", currentScore)
+	write("Best optimized score: %.4f\n", result.BestScore)
+	improvement := result.BestScore - currentScore
+	write("Improvement: %.4f (%.2f%%)\n", improvement, improvement/currentScore*percentageMultiplier100)
+
+	write("\n--- CURRENT vs OPTIMIZED WEIGHTS ---\n")
+	write("Algorithm        Current  Optimized  Change\n")
+	write("TreeEdit         %.3f    %.3f      %+.3f\n",
 		config.TreeEditWeight, result.BestWeights.TreeEdit,
 		result.BestWeights.TreeEdit-config.TreeEditWeight)
-	fmt.Printf("TokenSimilarity  %.3f    %.3f      %+.3f\n",
+	write("TokenSimilarity  %.3f    %.3f      %+.3f\n",
 		config.TokenSimilarityWeight, result.BestWeights.TokenSimilarity,
 		result.BestWeights.TokenSimilarity-config.TokenSimilarityWeight)
-	fmt.Printf("Structural       %.3f    %.3f      %+.3f\n",
+	write("Structural       %.3f    %.3f      %+.3f\n",
 		config.StructuralWeight, result.BestWeights.Structural,
 		result.BestWeights.Structural-config.StructuralWeight)
-	fmt.Printf("Signature        %.3f    %.3f      %+.3f\n",
+	write("Signature        %.3f    %.3f      %+.3f\n",
 		config.SignatureWeight, result.BestWeights.Signature,
 		result.BestWeights.Signature-config.SignatureWeight)
 
-	fmt.Printf("\n--- PERFORMANCE BY CATEGORY ---\n")
+	write("\n--- PERFORMANCE BY CATEGORY ---\n")
 	categoryErrors := make(map[string][]float64)
-	for _, result := range result.DetailedResults {
-		categoryErrors[result.Category] = append(categoryErrors[result.Category], result.Error)
+	for _, detailed := range result.DetailedResults {
+		categoryErrors[detailed.Category] = append(categoryErrors[detailed.Category], detailed.Error)
 	}
 
 	for category, errors := range categoryErrors {
@@ -171,10 +192,10 @@ func (wo *WeightOptimizer) PrintOptimizationReport(result OptimizationResult, cu
 			avgError += err
 		}
 		avgError /= float64(len(errors))
-		fmt.Printf("%-15s: Avg Error = %.4f (%d cases)\n", category, avgError, len(errors))
+		write("%-15s: Avg Error = %.4f (%d cases)\n", category, avgError, len(errors))
 	}
 
-	fmt.Printf("\n--- TOP 5 WORST PERFORMING CASES ---\n")
+	write("\n--- TOP 5 WORST PERFORMING CASES ---\n")
 	// Sort results by error (descending)
 	worst := make([]CaseResult, len(result.DetailedResults))
 	copy(worst, result.DetailedResults)
@@ -186,10 +207,10 @@ func (wo *WeightOptimizer) PrintOptimizationReport(result OptimizationResult, cu
 		}
 	}
 
-	for i := 0; i < 5 && i < len(worst); i++ {
+	for i := 0; i < maxWorstCasesToReport && i < len(worst); i++ {
 		caseResult := worst[i]
-		fmt.Printf("%d. %s (Category: %s)\n", i+1, caseResult.CaseName, caseResult.Category)
-		fmt.Printf("   Expected: %.3f, Actual: %.3f, Error: %.3f\n",
+		write("%d. %s (Category: %s)\n", i+1, caseResult.CaseName, caseResult.Category)
+		write("   Expected: %.3f, Actual: %.3f, Error: %.3f\n",
 			caseResult.Expected, caseResult.Actual, caseResult.Error)
 	}
 }

@@ -68,7 +68,7 @@ func (cu *ConfigUpdater) UpdateConfigWithWeights(
 
 // ensureBackupDir creates the backup directory if it doesn't exist.
 func (cu *ConfigUpdater) ensureBackupDir() error {
-	return os.MkdirAll(cu.backupDir, 0755)
+	return os.MkdirAll(cu.backupDir, 0o750)
 }
 
 // updateConfigFile updates the main config.go file with new weight constants.
@@ -85,8 +85,8 @@ func (cu *ConfigUpdater) updateConfigFile(weights config.SimilarityWeights, resu
 	backupFile := filepath.Join(cu.backupDir, fmt.Sprintf("config_%s.go",
 		result.Timestamp.Format("20060102_150405")))
 
-	if err := os.WriteFile(backupFile, content, 0644); err != nil {
-		return fmt.Errorf("failed to create backup: %w", err)
+	if writeErr := os.WriteFile(backupFile, content, 0o600); writeErr != nil {
+		return fmt.Errorf("failed to create backup: %w", writeErr)
 	}
 	result.BackupFiles = append(result.BackupFiles, backupFile)
 
@@ -94,8 +94,8 @@ func (cu *ConfigUpdater) updateConfigFile(weights config.SimilarityWeights, resu
 	updatedContent := cu.updateWeightConstants(string(content), weights)
 
 	// Write updated config
-	if err := os.WriteFile(configFile, []byte(updatedContent), 0644); err != nil {
-		return fmt.Errorf("failed to write updated config: %w", err)
+	if writeErr := os.WriteFile(configFile, []byte(updatedContent), 0o600); writeErr != nil {
+		return fmt.Errorf("failed to write updated config: %w", writeErr)
 	}
 	result.UpdatedFiles = append(result.UpdatedFiles, configFile)
 
@@ -109,16 +109,18 @@ func (cu *ConfigUpdater) updateWeightConstants(content string, weights config.Si
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Update weight constants
-		if strings.Contains(trimmed, "TreeEditWeight") && strings.Contains(trimmed, "=") {
+		containsAssignment := strings.Contains(trimmed, "=")
+
+		switch {
+		case strings.Contains(trimmed, "TreeEditWeight") && containsAssignment:
 			lines[i] = cu.updateConstantLine(line, "TreeEditWeight", weights.TreeEdit)
-		} else if strings.Contains(trimmed, "TokenSimilarityWeight") && strings.Contains(trimmed, "=") {
+		case strings.Contains(trimmed, "TokenSimilarityWeight") && containsAssignment:
 			lines[i] = cu.updateConstantLine(line, "TokenSimilarityWeight", weights.TokenSimilarity)
-		} else if strings.Contains(trimmed, "StructuralWeight") && strings.Contains(trimmed, "=") {
+		case strings.Contains(trimmed, "StructuralWeight") && containsAssignment:
 			lines[i] = cu.updateConstantLine(line, "StructuralWeight", weights.Structural)
-		} else if strings.Contains(trimmed, "SignatureWeight") && strings.Contains(trimmed, "=") && !strings.Contains(trimmed, "Different") {
+		case strings.Contains(trimmed, "SignatureWeight") && containsAssignment && !strings.Contains(trimmed, "Different"):
 			lines[i] = cu.updateConstantLine(line, "SignatureWeight", weights.Signature)
-		} else if strings.Contains(trimmed, "DifferentSignatureWeight") && strings.Contains(trimmed, "=") {
+		case strings.Contains(trimmed, "DifferentSignatureWeight") && containsAssignment:
 			lines[i] = cu.updateConstantLine(line, "DifferentSignatureWeight", weights.DifferentSignature)
 		}
 	}
@@ -269,7 +271,7 @@ performance:
 		weights.Signature,
 		weights.DifferentSignature)
 
-	return os.WriteFile(filename, []byte(yamlContent), 0644)
+	return os.WriteFile(filename, []byte(yamlContent), 0o600)
 }
 
 // RevertConfig reverts configuration changes using the most recent backup.
@@ -300,11 +302,11 @@ func (cu *ConfigUpdater) RevertConfig() error {
 
 	// Restore original config
 	configFile := "internal/config/config.go"
-	if err := os.WriteFile(configFile, content, 0644); err != nil {
-		return fmt.Errorf("failed to restore config file: %w", err)
+	if writeErr := os.WriteFile(configFile, content, 0o600); writeErr != nil {
+		return fmt.Errorf("failed to restore config file: %w", writeErr)
 	}
 
-	fmt.Printf("Configuration reverted from backup: %s\n", mostRecent)
+	_, _ = fmt.Fprintf(os.Stdout, "Configuration reverted from backup: %s\n", mostRecent)
 	return nil
 }
 
@@ -336,5 +338,5 @@ func (cu *ConfigUpdater) ValidateWeightSum(weights config.SimilarityWeights) err
 
 // PrintUpdateReport prints a detailed report of the configuration update.
 func (cu *ConfigUpdater) PrintUpdateReport(result *UpdateResult) {
-	fmt.Print(result.UpdateSummary)
+	_, _ = fmt.Fprint(os.Stdout, result.UpdateSummary)
 }

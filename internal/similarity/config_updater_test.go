@@ -209,7 +209,7 @@ func TestConfigUpdater_CreateYAMLConfig(t *testing.T) {
 	}
 
 	// Check file was created
-	if _, err := os.Stat(yamlFile); os.IsNotExist(err) {
+	if _, statErr := os.Stat(yamlFile); os.IsNotExist(statErr) {
 		t.Fatal("YAML config file was not created")
 	}
 
@@ -343,7 +343,7 @@ func TestConfigUpdater_ensureBackupDir(t *testing.T) {
 	}
 
 	// Check directory was created
-	if _, err := os.Stat(updater.backupDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(updater.backupDir); os.IsNotExist(statErr) {
 		t.Error("Backup directory was not created")
 	}
 
@@ -364,7 +364,7 @@ func TestConfigUpdater_ListBackups(t *testing.T) {
 	}
 
 	// Create backup directory and some test backup files
-	err := os.MkdirAll(backupDir, 0755)
+	err := os.MkdirAll(backupDir, 0o750)
 	if err != nil {
 		t.Fatalf("Failed to create backup directory: %v", err)
 	}
@@ -377,14 +377,14 @@ func TestConfigUpdater_ListBackups(t *testing.T) {
 	}
 
 	for _, filename := range backupFiles {
-		err := os.WriteFile(filepath.Join(backupDir, filename), []byte("test content"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test backup file: %v", err)
+		writeErr := os.WriteFile(filepath.Join(backupDir, filename), []byte("test content"), 0o600)
+		if writeErr != nil {
+			t.Fatalf("Failed to create test backup file: %v", writeErr)
 		}
 	}
 
 	// Create a non-matching file to ensure it's not included
-	err = os.WriteFile(filepath.Join(backupDir, "other_file.txt"), []byte("other"), 0644)
+	err = os.WriteFile(filepath.Join(backupDir, "other_file.txt"), []byte("other"), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create other file: %v", err)
 	}

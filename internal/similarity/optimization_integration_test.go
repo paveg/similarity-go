@@ -114,7 +114,7 @@ func TestWeightOptimizationWorkflow(t *testing.T) {
 	}
 
 	// Verify YAML file was created
-	if _, err := os.Stat(yamlFile); os.IsNotExist(err) {
+	if _, statErr := os.Stat(yamlFile); os.IsNotExist(statErr) {
 		t.Error("YAML config file was not created")
 	}
 

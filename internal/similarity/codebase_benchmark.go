@@ -16,6 +16,31 @@ import (
 	"github.com/paveg/similarity-go/internal/config"
 )
 
+const (
+	percentage100               = 100.0
+	topPairsDisplayLimit        = 10
+	topPackageDisplayLimit      = 5
+	topPairsPerPackage          = 5
+	defaultMinLines             = 5
+	defaultMaxFunctions         = 1000
+	detectorThreshold           = 0.7
+	similarityNearDuplicate     = 0.95
+	similarityRefactorCandidate = 0.85
+	similaritySimilarLogic      = 0.75
+	similarityVeryHigh          = 0.9
+	similarityHigh              = 0.8
+	similarityMedium            = 0.7
+	similarityLow               = 0.6
+	reportSeparatorLength       = 60
+	pairsDivisor                = 2
+	lineCountSmall              = 10
+	lineCountMedium             = 30
+	lineCountLarge              = 100
+	complexityLowThreshold      = 3
+	complexityMediumThreshold   = 7
+	complexityHighThreshold     = 15
+)
+
 // CodebaseBenchmark provides benchmarking against real Go codebases.
 type CodebaseBenchmark struct {
 	basePaths    []string
@@ -60,6 +85,8 @@ type FunctionMetadata struct {
 }
 
 // SimilarityComponents breaks down similarity calculation.
+//
+//nolint:revive // exported name communicates intent despite stutter
 type SimilarityComponents struct {
 	TreeEdit        float64
 	TokenSimilarity float64
@@ -117,8 +144,8 @@ func NewCodebaseBenchmark(basePaths []string) *CodebaseBenchmark {
 			"mock_",
 			"generated",
 		},
-		minLines:     5,
-		maxFunctions: 1000, // Limit for performance
+		minLines:     defaultMinLines,
+		maxFunctions: defaultMaxFunctions,
 		fileSet:      token.NewFileSet(),
 	}
 }
@@ -134,13 +161,13 @@ func (cb *CodebaseBenchmark) SetParameters(minLines, maxFunctions int, excludePa
 
 // BenchmarkWeights benchmarks weights against real codebases.
 func (cb *CodebaseBenchmark) BenchmarkWeights(
-	t *testing.T,
+	_ *testing.T,
 	weights config.SimilarityWeights,
 ) ([]BenchmarkResult, error) {
 	var results []BenchmarkResult
 
 	for _, basePath := range cb.basePaths {
-		result, err := cb.benchmarkSingleCodebase(t, basePath, weights)
+		result, err := cb.benchmarkSingleCodebase(basePath, weights)
 		if err != nil {
 			return nil, fmt.Errorf("failed to benchmark %s: %w", basePath, err)
 		}
@@ -152,7 +179,6 @@ func (cb *CodebaseBenchmark) BenchmarkWeights(
 
 // benchmarkSingleCodebase benchmarks weights against a single codebase.
 func (cb *CodebaseBenchmark) benchmarkSingleCodebase(
-	t *testing.T,
 	basePath string,
 	weights config.SimilarityWeights,
 ) (*BenchmarkResult, error) {
@@ -170,7 +196,7 @@ func (cb *CodebaseBenchmark) benchmarkSingleCodebase(
 	}
 
 	// Calculate similarity pairs
-	detector := NewDetector(0.7) // Use 0.7 threshold for real-world analysis
+	detector := NewDetector(detectorThreshold) // Use 0.7 threshold for real-world analysis
 	cfg := config.Default()
 	cfg.Similarity.Weights = weights
 	detector.config = cfg
@@ -217,10 +243,10 @@ func (cb *CodebaseBenchmark) extractFunctions(basePath string) ([]FunctionMetada
 
 		// Process Go files
 		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			funcs, err := cb.extractFunctionsFromFile(path)
-			if err != nil {
+			funcs, fileErr := cb.extractFunctionsFromFile(path)
+			if fileErr != nil {
 				// Log error but continue processing
-				fmt.Printf("Warning: failed to parse %s: %v\n", path, err)
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to parse %s: %v\n", path, fileErr)
 				return nil
 			}
 			functions = append(functions, funcs...)
@@ -337,7 +363,7 @@ func (cb *CodebaseBenchmark) findSimilarityPairs(functions []FunctionMetadata, d
 	}
 
 	// Find pairs above threshold
-	for i := range len(internalFuncs) {
+	for i := range internalFuncs {
 		for j := i + 1; j < len(internalFuncs); j++ {
 			func1, func2 := internalFuncs[i], internalFuncs[j]
 
@@ -397,19 +423,22 @@ func (cb *CodebaseBenchmark) calculateComponents(
 }
 
 // categorizePair categorizes a similarity pair.
-func (cb *CodebaseBenchmark) categorizePair(similarity float64, func1, func2 FunctionMetadata) string {
-	if similarity >= 0.95 {
+func (cb *CodebaseBenchmark) categorizePair(similarity float64, _ FunctionMetadata, _ FunctionMetadata) string {
+	switch {
+	case similarity >= similarityNearDuplicate:
 		return "near-duplicate"
-	} else if similarity >= 0.85 {
+	case similarity >= similarityRefactorCandidate:
 		return "refactoring-candidate"
-	} else if similarity >= 0.75 {
+	case similarity >= similaritySimilarLogic:
 		return "similar-logic"
-	} else {
+	default:
 		return "related-functionality"
 	}
 }
 
 // calculateCodebaseStats computes comprehensive statistics.
+//
+//nolint:gocognit,funlen // statistical aggregation requires iterative categorization
 func (cb *CodebaseBenchmark) calculateCodebaseStats(functions []FunctionMetadata, pairs []RealWorldPair) CodebaseStats {
 	stats := CodebaseStats{
 		FunctionSizeDistribution: make(map[string]int),
@@ -420,39 +449,42 @@ func (cb *CodebaseBenchmark) calculateCodebaseStats(functions []FunctionMetadata
 
 	// Function size distribution
 	for _, f := range functions {
-		if f.LineCount < 10 {
+		switch {
+		case f.LineCount < lineCountSmall:
 			stats.FunctionSizeDistribution["Small"]++
-		} else if f.LineCount < 30 {
+		case f.LineCount < lineCountMedium:
 			stats.FunctionSizeDistribution["Medium"]++
-		} else if f.LineCount < 100 {
+		case f.LineCount < lineCountLarge:
 			stats.FunctionSizeDistribution["Large"]++
-		} else {
+		default:
 			stats.FunctionSizeDistribution["XLarge"]++
 		}
 	}
 
 	// Complexity distribution
 	for _, f := range functions {
-		if f.Complexity < 3 {
+		switch {
+		case f.Complexity < complexityLowThreshold:
 			stats.ComplexityDistribution["Low"]++
-		} else if f.Complexity < 7 {
+		case f.Complexity < complexityMediumThreshold:
 			stats.ComplexityDistribution["Medium"]++
-		} else if f.Complexity < 15 {
+		case f.Complexity < complexityHighThreshold:
 			stats.ComplexityDistribution["High"]++
-		} else {
+		default:
 			stats.ComplexityDistribution["Very High"]++
 		}
 	}
 
 	// Similarity distribution
 	for _, p := range pairs {
-		if p.Similarity >= 0.9 {
+		switch {
+		case p.Similarity >= similarityVeryHigh:
 			stats.SimilarityDistribution["Very High (0.9+)"]++
-		} else if p.Similarity >= 0.8 {
+		case p.Similarity >= similarityHigh:
 			stats.SimilarityDistribution["High (0.8-0.9)"]++
-		} else if p.Similarity >= 0.7 {
+		case p.Similarity >= similarityMedium:
 			stats.SimilarityDistribution["Medium (0.7-0.8)"]++
-		} else {
+		case p.Similarity >= config.MinSimilarity:
 			stats.SimilarityDistribution["Low (0.6-0.7)"]++
 		}
 	}
@@ -490,8 +522,8 @@ func (cb *CodebaseBenchmark) calculateCodebaseStats(functions []FunctionMetadata
 		})
 
 		topPairs := packagePairs
-		if len(topPairs) > 5 {
-			topPairs = topPairs[:5]
+		if len(topPairs) > topPairsPerPackage {
+			topPairs = topPairs[:topPairsPerPackage]
 		}
 
 		stats.PackageAnalysis[pkg] = PackageStats{
@@ -515,9 +547,9 @@ func (cb *CodebaseBenchmark) calculateDuplicationMetrics(pairs []RealWorldPair) 
 	var highSim, mediumSim, refactoringCandidates int
 
 	for _, pair := range pairs {
-		if pair.Similarity >= 0.8 {
+		if pair.Similarity >= similarityHigh {
 			highSim++
-		} else if pair.Similarity >= 0.6 {
+		} else if pair.Similarity >= similarityLow {
 			mediumSim++
 		}
 
@@ -530,7 +562,7 @@ func (cb *CodebaseBenchmark) calculateDuplicationMetrics(pairs []RealWorldPair) 
 	totalPairs := len(pairs)
 	estimatedDuplication := 0.0
 	if totalPairs > 0 {
-		estimatedDuplication = float64(highSim) / float64(totalPairs) * 100
+		estimatedDuplication = float64(highSim) / float64(totalPairs) * percentage100
 	}
 
 	return DuplicationMetrics{
@@ -544,10 +576,10 @@ func (cb *CodebaseBenchmark) calculateDuplicationMetrics(pairs []RealWorldPair) 
 // calculatePerformanceMetrics calculates performance-related metrics.
 func (cb *CodebaseBenchmark) calculatePerformanceMetrics(
 	startTime time.Time,
-	functionCount, pairCount int,
+	functionCount, _ int,
 ) PerformanceMetrics {
 	totalTime := time.Since(startTime)
-	comparisons := functionCount * (functionCount - 1) / 2
+	comparisons := functionCount * (functionCount - 1) / pairsDivisor
 
 	avgComparisonTime := time.Duration(0)
 	if comparisons > 0 {
@@ -592,68 +624,75 @@ func (cb *CodebaseBenchmark) countFiles(basePath string) int {
 }
 
 // PrintBenchmarkReport prints a comprehensive benchmark report.
+//
+//nolint:gocognit,funlen // report formatting naturally requires branching for sections
 func (cb *CodebaseBenchmark) PrintBenchmarkReport(results []BenchmarkResult) {
-	fmt.Printf("\n=== CODEBASE BENCHMARK REPORT ===\n")
+	out := os.Stdout
+	write := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(out, format, args...)
+	}
+
+	write("\n=== CODEBASE BENCHMARK REPORT ===\n")
 
 	for i, result := range results {
 		if i > 0 {
-			fmt.Printf("\n%s\n", strings.Repeat("=", 60))
+			write("\n%s\n", strings.Repeat("=", reportSeparatorLength))
 		}
 
-		fmt.Printf("Codebase: %s\n", result.CodebasePath)
-		fmt.Printf("Files Analyzed: %d\n", result.TotalFiles)
-		fmt.Printf("Functions Extracted: %d\n", result.TotalFunctions)
-		fmt.Printf("Processing Time: %s\n", result.ProcessingTime)
-		fmt.Printf("Similar Pairs Found: %d\n", len(result.SimilarityPairs))
+		write("Codebase: %s\n", result.CodebasePath)
+		write("Files Analyzed: %d\n", result.TotalFiles)
+		write("Functions Extracted: %d\n", result.TotalFunctions)
+		write("Processing Time: %s\n", result.ProcessingTime)
+		write("Similar Pairs Found: %d\n", len(result.SimilarityPairs))
 
 		// Function size distribution
-		fmt.Printf("\n--- FUNCTION SIZE DISTRIBUTION ---\n")
+		write("\n--- FUNCTION SIZE DISTRIBUTION ---\n")
 		for size, count := range result.Statistics.FunctionSizeDistribution {
-			percentage := float64(count) / float64(result.TotalFunctions) * 100
-			fmt.Printf("%-8s: %4d (%5.1f%%)\n", size, count, percentage)
+			percentage := float64(count) / float64(result.TotalFunctions) * percentage100
+			write("%-8s: %4d (%5.1f%%)\n", size, count, percentage)
 		}
 
 		// Complexity distribution
-		fmt.Printf("\n--- COMPLEXITY DISTRIBUTION ---\n")
+		write("\n--- COMPLEXITY DISTRIBUTION ---\n")
 		for complexity, count := range result.Statistics.ComplexityDistribution {
-			percentage := float64(count) / float64(result.TotalFunctions) * 100
-			fmt.Printf("%-10s: %4d (%5.1f%%)\n", complexity, count, percentage)
+			percentage := float64(count) / float64(result.TotalFunctions) * percentage100
+			write("%-10s: %4d (%5.1f%%)\n", complexity, count, percentage)
 		}
 
 		// Similarity distribution
 		if len(result.SimilarityPairs) > 0 {
-			fmt.Printf("\n--- SIMILARITY DISTRIBUTION ---\n")
+			write("\n--- SIMILARITY DISTRIBUTION ---\n")
 			for simRange, count := range result.Statistics.SimilarityDistribution {
-				percentage := float64(count) / float64(len(result.SimilarityPairs)) * 100
-				fmt.Printf("%-20s: %4d (%5.1f%%)\n", simRange, count, percentage)
+				percentage := float64(count) / float64(len(result.SimilarityPairs)) * percentage100
+				write("%-20s: %4d (%5.1f%%)\n", simRange, count, percentage)
 			}
 		}
 
 		// Duplication metrics
-		fmt.Printf("\n--- DUPLICATION ANALYSIS ---\n")
+		write("\n--- DUPLICATION ANALYSIS ---\n")
 		dup := result.Statistics.DuplicationMetrics
-		fmt.Printf("High Similarity Pairs (>0.8):  %d\n", dup.HighSimilarityCount)
-		fmt.Printf("Medium Similarity Pairs (0.6-0.8): %d\n", dup.MediumSimilarityCount)
-		fmt.Printf("Refactoring Candidates:         %d\n", dup.RefactoringCandidates)
-		fmt.Printf("Estimated Duplication:          %.1f%%\n", dup.EstimatedDuplication)
+		write("High Similarity Pairs (>0.8):  %d\n", dup.HighSimilarityCount)
+		write("Medium Similarity Pairs (0.6-0.8): %d\n", dup.MediumSimilarityCount)
+		write("Refactoring Candidates:         %d\n", dup.RefactoringCandidates)
+		write("Estimated Duplication:          %.1f%%\n", dup.EstimatedDuplication)
 
 		// Performance metrics
-		fmt.Printf("\n--- PERFORMANCE METRICS ---\n")
+		write("\n--- PERFORMANCE METRICS ---\n")
 		perf := result.PerformanceData
-		fmt.Printf("Total Comparisons:      %d\n", perf.TotalComparisons)
-		fmt.Printf("Avg Comparison Time:    %s\n", perf.AvgComparisonTime)
-		fmt.Printf("Functions per Second:    %.1f\n",
+		write("Total Comparisons:      %d\n", perf.TotalComparisons)
+		write("Avg Comparison Time:    %s\n", perf.AvgComparisonTime)
+		write("Functions per Second:    %.1f\n",
 			float64(result.TotalFunctions)/result.ProcessingTime.Seconds())
 
 		// Top similar pairs
-		fmt.Printf("\n--- TOP 10 SIMILAR PAIRS ---\n")
+		write("\n--- TOP 10 SIMILAR PAIRS ---\n")
 		topPairs := result.SimilarityPairs
-		if len(topPairs) > 10 {
-			topPairs = topPairs[:10]
+		if len(topPairs) > topPairsDisplayLimit {
+			topPairs = topPairs[:topPairsDisplayLimit]
 		}
 
 		for j, pair := range topPairs {
-			fmt.Printf("%2d. %.3f %s:%s ↔ %s:%s (%s)\n",
+			write("%2d. %.3f %s:%s ↔ %s:%s (%s)\n",
 				j+1, pair.Similarity,
 				filepath.Base(pair.Function1.File), pair.Function1.Name,
 				filepath.Base(pair.Function2.File), pair.Function2.Name,
@@ -661,7 +700,7 @@ func (cb *CodebaseBenchmark) PrintBenchmarkReport(results []BenchmarkResult) {
 		}
 
 		// Package analysis summary
-		fmt.Printf("\n--- TOP PACKAGES BY DUPLICATION ---\n")
+		write("\n--- TOP PACKAGES BY DUPLICATION ---\n")
 		type pkgDup struct {
 			name  string
 			ratio float64
@@ -682,17 +721,17 @@ func (cb *CodebaseBenchmark) PrintBenchmarkReport(results []BenchmarkResult) {
 		})
 
 		for j, pkg := range packageDups {
-			if j >= 5 { // Show top 5
+			if j >= topPackageDisplayLimit {
 				break
 			}
-			fmt.Printf("%d. %-20s: %.3f (%d functions)\n",
+			write("%d. %-20s: %.3f (%d functions)\n",
 				j+1, pkg.name, pkg.ratio, pkg.count)
 		}
 	}
 
 	// Overall summary
 	if len(results) > 1 {
-		fmt.Printf("\n=== OVERALL SUMMARY ===\n")
+		write("\n=== OVERALL SUMMARY ===\n")
 		var totalFiles, totalFunctions, totalPairs int
 		var totalTime time.Duration
 
@@ -703,12 +742,12 @@ func (cb *CodebaseBenchmark) PrintBenchmarkReport(results []BenchmarkResult) {
 			totalTime += result.ProcessingTime
 		}
 
-		fmt.Printf("Total Codebases:   %d\n", len(results))
-		fmt.Printf("Total Files:       %d\n", totalFiles)
-		fmt.Printf("Total Functions:   %d\n", totalFunctions)
-		fmt.Printf("Total Pairs:       %d\n", totalPairs)
-		fmt.Printf("Total Time:        %s\n", totalTime)
-		fmt.Printf("Avg Duplication:   %.1f%%\n",
-			float64(totalPairs)/float64(totalFunctions)*100)
+		write("Total Codebases:   %d\n", len(results))
+		write("Total Files:       %d\n", totalFiles)
+		write("Total Functions:   %d\n", totalFunctions)
+		write("Total Pairs:       %d\n", totalPairs)
+		write("Total Time:        %s\n", totalTime)
+		write("Avg Duplication:   %.1f%%\n",
+			float64(totalPairs)/float64(totalFunctions)*percentage100)
 	}
 }

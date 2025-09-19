@@ -20,6 +20,8 @@ type BenchmarkCase struct {
 }
 
 // GetBenchmarkDataset returns a comprehensive dataset for weight optimization.
+//
+//nolint:funlen,mnd // dataset definition requires explicit listing of scenarios and literal expectations
 func GetBenchmarkDataset() []BenchmarkCase {
 	return []BenchmarkCase{
 		// Identical functions

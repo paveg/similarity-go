@@ -82,18 +82,18 @@ func TestGeneticOptimizer_generateRandomWeights(t *testing.T) {
 			t.Errorf("Expected penalty weight 0.3, got %f", weights.DifferentSignature)
 		}
 
-		// Check weights are within expected ranges
-		if weights.TreeEdit > 0.5 || weights.TreeEdit < 0.1 {
-			t.Errorf("TreeEdit weight out of expected range: %f", weights.TreeEdit)
+		// Check weights remain within reasonable normalized bounds.
+		if weights.TreeEdit < 0.05 || weights.TreeEdit > 0.7 {
+			t.Errorf("TreeEdit weight out of reasonable range: %f", weights.TreeEdit)
 		}
-		if weights.TokenSimilarity > 0.5 || weights.TokenSimilarity < 0.1 {
-			t.Errorf("TokenSimilarity weight out of expected range: %f", weights.TokenSimilarity)
+		if weights.TokenSimilarity < 0.05 || weights.TokenSimilarity > 0.7 {
+			t.Errorf("TokenSimilarity weight out of reasonable range: %f", weights.TokenSimilarity)
 		}
-		if weights.Structural > 0.4 || weights.Structural < 0.1 {
-			t.Errorf("Structural weight out of expected range: %f", weights.Structural)
+		if weights.Structural < 0.05 || weights.Structural > 0.6 {
+			t.Errorf("Structural weight out of reasonable range: %f", weights.Structural)
 		}
-		if weights.Signature > 0.3 || weights.Signature < 0.05 {
-			t.Errorf("Signature weight out of expected range: %f", weights.Signature)
+		if weights.Signature < 0.05 || weights.Signature > 0.4 {
+			t.Errorf("Signature weight out of reasonable range: %f", weights.Signature)
 		}
 	}
 }

@@ -4,11 +4,38 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"os"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/paveg/similarity-go/internal/config"
+)
+
+const (
+	percentageMultiplier     = 100.0
+	defaultPopulationSize    = 50
+	defaultGenerations       = 100
+	defaultMutationRate      = 0.1
+	defaultCrossoverRate     = 0.8
+	defaultEliteSize         = 5
+	stagnationEpsilon        = 1e-6
+	stagnationLimit          = 20
+	treeEditRange            = 0.4
+	treeEditOffset           = 0.1
+	tokenSimilarityRange     = 0.4
+	tokenSimilarityOffset    = 0.1
+	structuralRange          = 0.3
+	structuralOffset         = 0.1
+	signatureRange           = 0.25
+	signatureOffset          = 0.05
+	mutationSigmaBase        = 0.05
+	mutationAgeFactor        = 0.1
+	mutationProbability      = 0.3
+	minWeightThreshold       = 0.01
+	tournamentSize           = 3
+	minimumPopulationForEval = 2
+	crossoverMixThreshold    = 0.5
 )
 
 // GeneticOptimizer implements genetic algorithm for weight optimization.
@@ -51,13 +78,19 @@ type GenerationStats struct {
 func NewGeneticOptimizer() *GeneticOptimizer {
 	return &GeneticOptimizer{
 		dataset:        GetBenchmarkDataset(),
-		populationSize: 50,
-		generations:    100,
-		mutationRate:   0.1,
-		crossoverRate:  0.8,
-		eliteSize:      5,
-		random:         rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0)),
+		populationSize: defaultPopulationSize,
+		generations:    defaultGenerations,
+		mutationRate:   defaultMutationRate,
+		crossoverRate:  defaultCrossoverRate,
+		eliteSize:      defaultEliteSize,
+		random:         newPseudoRandomGenerator(),
 	}
+}
+
+//nolint:gosec // pseudo-random generator is sufficient for heuristic optimization.
+func newPseudoRandomGenerator() *rand.Rand {
+	seed := time.Now().UnixNano()
+	return rand.New(rand.NewPCG(uint64(seed), uint64(seed>>1)))
 }
 
 // SetParameters allows customizing genetic algorithm parameters.
@@ -93,7 +126,7 @@ func (g *GeneticOptimizer) OptimizeWeights(t *testing.T) GeneticResult {
 		history = append(history, stats)
 
 		// Check for convergence (no improvement for 10 generations)
-		if math.Abs(stats.BestFitness-lastBestFitness) < 1e-6 {
+		if math.Abs(stats.BestFitness-lastBestFitness) < stagnationEpsilon {
 			stagnationCount++
 		} else {
 			stagnationCount = 0
@@ -105,7 +138,7 @@ func (g *GeneticOptimizer) OptimizeWeights(t *testing.T) GeneticResult {
 		}
 
 		// Early termination if converged for too long
-		if stagnationCount >= 20 {
+		if stagnationCount >= stagnationLimit {
 			break
 		}
 
@@ -151,10 +184,10 @@ func (g *GeneticOptimizer) initializePopulation() []Individual {
 // generateRandomWeights creates random weights that sum to approximately 1.0.
 func (g *GeneticOptimizer) generateRandomWeights() config.SimilarityWeights {
 	// Generate random values
-	treeEdit := g.random.Float64()*0.4 + 0.1    // 0.1 - 0.5
-	tokenSim := g.random.Float64()*0.4 + 0.1    // 0.1 - 0.5
-	structural := g.random.Float64()*0.3 + 0.1  // 0.1 - 0.4
-	signature := g.random.Float64()*0.25 + 0.05 // 0.05 - 0.3
+	treeEdit := g.random.Float64()*treeEditRange + treeEditOffset
+	tokenSim := g.random.Float64()*tokenSimilarityRange + tokenSimilarityOffset
+	structural := g.random.Float64()*structuralRange + structuralOffset
+	signature := g.random.Float64()*signatureRange + signatureOffset
 
 	// Normalize to sum to 1.0
 	total := treeEdit + tokenSim + structural + signature
@@ -168,7 +201,7 @@ func (g *GeneticOptimizer) generateRandomWeights() config.SimilarityWeights {
 		TokenSimilarity:    tokenSim,
 		Structural:         structural,
 		Signature:          signature,
-		DifferentSignature: 0.3, // Keep penalty constant
+		DifferentSignature: config.DifferentSignatureWeight,
 	}
 }
 
@@ -216,14 +249,14 @@ func (g *GeneticOptimizer) calculateGenerationStats(generation int, population [
 
 // calculatePopulationDiversity measures genetic diversity in the population.
 func (g *GeneticOptimizer) calculatePopulationDiversity(population []Individual) float64 {
-	if len(population) < 2 {
+	if len(population) < minimumPopulationForEval {
 		return 0.0
 	}
 
 	var totalDistance float64
 	comparisons := 0
 
-	for i := range len(population) {
+	for i := range population {
 		for j := i + 1; j < len(population); j++ {
 			distance := g.calculateWeightDistance(population[i].Weights, population[j].Weights)
 			totalDistance += distance
@@ -261,8 +294,8 @@ func (g *GeneticOptimizer) evolvePopulation(t *testing.T, population []Individua
 	// Generate offspring through crossover and mutation
 	for len(nextGeneration) < g.populationSize {
 		// Tournament selection
-		parent1 := g.tournamentSelection(population, 3)
-		parent2 := g.tournamentSelection(population, 3)
+		parent1 := g.tournamentSelection(population, tournamentSize)
+		parent2 := g.tournamentSelection(population, tournamentSize)
 
 		var child Individual
 
@@ -271,7 +304,7 @@ func (g *GeneticOptimizer) evolvePopulation(t *testing.T, population []Individua
 			child = g.crossover(parent1, parent2)
 		} else {
 			// If no crossover, randomly pick one parent
-			if g.random.Float64() < 0.5 {
+			if g.random.Float64() < crossoverMixThreshold {
 				child = parent1
 			} else {
 				child = parent2
@@ -304,6 +337,16 @@ func (g *GeneticOptimizer) tournamentSelection(population []Individual, tourname
 		tournamentSize = len(population)
 	}
 
+	if tournamentSize == len(population) {
+		best := population[0]
+		for _, candidate := range population[1:] {
+			if candidate.Fitness > best.Fitness {
+				best = candidate
+			}
+		}
+		return best
+	}
+
 	best := population[g.random.IntN(len(population))]
 
 	for i := 1; i < tournamentSize; i++ {
@@ -327,7 +370,7 @@ func (g *GeneticOptimizer) crossover(parent1, parent2 Individual) Individual {
 			TokenSimilarity:    alpha*parent1.Weights.TokenSimilarity + (1-alpha)*parent2.Weights.TokenSimilarity,
 			Structural:         alpha*parent1.Weights.Structural + (1-alpha)*parent2.Weights.Structural,
 			Signature:          alpha*parent1.Weights.Signature + (1-alpha)*parent2.Weights.Signature,
-			DifferentSignature: 0.3, // Keep penalty constant
+			DifferentSignature: config.DifferentSignatureWeight, // Keep penalty constant
 		},
 		Age: 0,
 	}
@@ -351,7 +394,7 @@ func (g *GeneticOptimizer) mutate(individual Individual) Individual {
 	mutated := individual
 
 	// Gaussian mutation with adaptive step size
-	sigma := 0.05 * (1.0 + 0.1*float64(individual.Age)) // Smaller mutations for older individuals
+	sigma := mutationSigmaBase * (1.0 + mutationAgeFactor*float64(individual.Age)) // Smaller mutations for older individuals
 
 	// Apply mutations to each weight
 	weights := []float64{
@@ -362,13 +405,13 @@ func (g *GeneticOptimizer) mutate(individual Individual) Individual {
 	}
 
 	for i := range weights {
-		if g.random.Float64() < 0.3 { // 30% chance to mutate each weight
+		if g.random.Float64() < mutationProbability {
 			mutation := g.random.NormFloat64() * sigma
 			weights[i] += mutation
 
 			// Ensure positive weights
-			if weights[i] < 0.01 {
-				weights[i] = 0.01
+			if weights[i] < minWeightThreshold {
+				weights[i] = minWeightThreshold
 			}
 		}
 	}
@@ -386,7 +429,7 @@ func (g *GeneticOptimizer) mutate(individual Individual) Individual {
 		TokenSimilarity:    weights[1],
 		Structural:         weights[2],
 		Signature:          weights[3],
-		DifferentSignature: 0.3,
+		DifferentSignature: config.DifferentSignatureWeight,
 	}
 
 	return mutated
@@ -394,33 +437,37 @@ func (g *GeneticOptimizer) mutate(individual Individual) Individual {
 
 // PrintGeneticReport prints a detailed report of genetic algorithm results.
 func (g *GeneticOptimizer) PrintGeneticReport(result GeneticResult, baselineScore float64) {
-	fmt.Printf("\n=== GENETIC ALGORITHM OPTIMIZATION REPORT ===\n")
-	fmt.Printf("Population Size: %d\n", g.populationSize)
-	fmt.Printf("Generations Run: %d\n", len(result.GenerationHistory))
-	fmt.Printf("Total Evaluations: %d\n", result.TotalEvaluations)
-	fmt.Printf("Convergence Generation: %d\n", result.ConvergenceGen)
+	out := os.Stdout
+	write := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(out, format, args...)
+	}
+
+	write("\n=== GENETIC ALGORITHM OPTIMIZATION REPORT ===\n")
+	write("Population Size: %d\n", g.populationSize)
+	write("Generations Run: %d\n", len(result.GenerationHistory))
+	write("Total Evaluations: %d\n", result.TotalEvaluations)
+	write("Convergence Generation: %d\n", result.ConvergenceGen)
 
 	best := result.BestIndividual
-	fmt.Printf("\nBaseline Score: %.6f\n", baselineScore)
-	fmt.Printf("Best GA Score: %.6f\n", best.Fitness)
-	fmt.Printf("Improvement: %.6f (%.2f%%)\n",
-		best.Fitness-baselineScore,
-		(best.Fitness-baselineScore)/baselineScore*100)
+	write("\nBaseline Score: %.6f\n", baselineScore)
+	write("Best GA Score: %.6f\n", best.Fitness)
+	improvement := best.Fitness - baselineScore
+	write("Improvement: %.6f (%.2f%%)\n", improvement, improvement/baselineScore*percentageMultiplier)
 
-	fmt.Printf("\n--- OPTIMIZED WEIGHTS ---\n")
-	fmt.Printf("TreeEdit:        %.4f\n", best.Weights.TreeEdit)
-	fmt.Printf("TokenSimilarity: %.4f\n", best.Weights.TokenSimilarity)
-	fmt.Printf("Structural:      %.4f\n", best.Weights.Structural)
-	fmt.Printf("Signature:       %.4f\n", best.Weights.Signature)
-	fmt.Printf("Weight Sum:      %.4f\n",
+	write("\n--- OPTIMIZED WEIGHTS ---\n")
+	write("TreeEdit:        %.4f\n", best.Weights.TreeEdit)
+	write("TokenSimilarity: %.4f\n", best.Weights.TokenSimilarity)
+	write("Structural:      %.4f\n", best.Weights.Structural)
+	write("Signature:       %.4f\n", best.Weights.Signature)
+	write("Weight Sum:      %.4f\n",
 		best.Weights.TreeEdit+best.Weights.TokenSimilarity+best.Weights.Structural+best.Weights.Signature)
 
-	fmt.Printf("\n--- EVOLUTION PROGRESS ---\n")
-	fmt.Printf("Generation  Best Score  Avg Score   Diversity\n")
+	write("\n--- EVOLUTION PROGRESS ---\n")
+	write("Generation  Best Score  Avg Score   Diversity\n")
 
 	for i, gen := range result.GenerationHistory {
 		if i%10 == 0 || i == len(result.GenerationHistory)-1 {
-			fmt.Printf("%9d   %9.6f   %8.6f   %8.6f\n",
+			write("%9d   %9.6f   %8.6f   %8.6f\n",
 				gen.Generation, gen.BestFitness, gen.AvgFitness, gen.Diversity)
 		}
 	}
@@ -428,18 +475,18 @@ func (g *GeneticOptimizer) PrintGeneticReport(result GeneticResult, baselineScor
 	// Population diversity analysis
 	if len(result.FinalPopulation) > 1 {
 		finalDiversity := g.calculatePopulationDiversity(result.FinalPopulation)
-		fmt.Printf("\nFinal Population Diversity: %.6f\n", finalDiversity)
+		write("\nFinal Population Diversity: %.6f\n", finalDiversity)
 
 		// Show top 5 individuals
-		fmt.Printf("\n--- TOP 5 SOLUTIONS ---\n")
+		write("\n--- TOP 5 SOLUTIONS ---\n")
 		sort.Slice(result.FinalPopulation, func(i, j int) bool {
 			return result.FinalPopulation[i].Fitness > result.FinalPopulation[j].Fitness
 		})
 
 		for i := 0; i < 5 && i < len(result.FinalPopulation); i++ {
 			ind := result.FinalPopulation[i]
-			fmt.Printf("%d. Score: %.6f, Age: %d\n", i+1, ind.Fitness, ind.Age)
-			fmt.Printf("   Weights: [%.3f, %.3f, %.3f, %.3f]\n",
+			write("%d. Score: %.6f, Age: %d\n", i+1, ind.Fitness, ind.Age)
+			write("   Weights: [%.3f, %.3f, %.3f, %.3f]\n",
 				ind.Weights.TreeEdit, ind.Weights.TokenSimilarity,
 				ind.Weights.Structural, ind.Weights.Signature)
 		}
