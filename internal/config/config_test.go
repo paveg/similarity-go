@@ -86,16 +86,44 @@ func TestValidate(t *testing.T) {
 			},
 			wantError: true,
 		},
+		{
+			name: "weights must be positive",
+			modifier: func(c *Config) {
+				c.Similarity.Weights.TreeEdit = -0.1
+			},
+			wantError: true,
+		},
+		{
+			name: "weights sum out of range",
+			modifier: func(c *Config) {
+				c.Similarity.Weights = SimilarityWeights{
+					TreeEdit:           0.2,
+					TokenSimilarity:    0.2,
+					Structural:         0.2,
+					Signature:          0.2,
+					DifferentSignature: c.Similarity.Weights.DifferentSignature,
+				}
+			},
+			wantError: true,
+		},
+		{
+			name: "different signature weight out of range",
+			modifier: func(c *Config) {
+				c.Similarity.Weights.DifferentSignature = 1.5
+			},
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {
+		tc := tt
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Default()
-			tt.modifier(cfg)
+			tc.modifier(cfg)
 
 			err := cfg.Validate()
-			if (err != nil) != tt.wantError {
-				t.Errorf("Config.Validate() error = %v, wantError %v", err, tt.wantError)
+			if (err != nil) != tc.wantError {
+				t.Errorf("Config.Validate() error = %v, wantError %v", err, tc.wantError)
 			}
 		})
 	}

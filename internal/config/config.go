@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -23,6 +24,8 @@ const (
 	MaxLineDifferenceRatio   = 3.0
 	MaxCacheSize             = 10000
 	MaxEmptyVsPopulated      = 5
+	WeightSumTarget          = 1.0
+	WeightSumTolerance       = 0.05
 )
 
 // Config represents the complete application configuration.
@@ -228,11 +231,35 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate weights sum to reasonable values
-	totalWeight := c.Similarity.Weights.TreeEdit + c.Similarity.Weights.TokenSimilarity +
-		c.Similarity.Weights.Structural + c.Similarity.Weights.Signature
+	weights := c.Similarity.Weights
 
-	if totalWeight <= 0 {
-		return fmt.Errorf("similarity weights must sum to a positive value, got %f", totalWeight)
+	if weights.TreeEdit <= 0 || weights.TokenSimilarity <= 0 ||
+		weights.Structural <= 0 || weights.Signature <= 0 {
+		return fmt.Errorf(
+			"similarity weights must be positive (tree_edit=%.4f, token_similarity=%.4f, structural=%.4f, signature=%.4f)",
+			weights.TreeEdit,
+			weights.TokenSimilarity,
+			weights.Structural,
+			weights.Signature,
+		)
+	}
+
+	totalWeight := weights.TreeEdit + weights.TokenSimilarity + weights.Structural + weights.Signature
+
+	if math.Abs(totalWeight-WeightSumTarget) > WeightSumTolerance {
+		return fmt.Errorf(
+			"similarity weights must sum to %.2f±%.2f, got %.4f",
+			WeightSumTarget,
+			WeightSumTolerance,
+			totalWeight,
+		)
+	}
+
+	if weights.DifferentSignature < 0.0 || weights.DifferentSignature > 1.0 {
+		return fmt.Errorf(
+			"different_signature weight must be between 0.0 and 1.0, got %.4f",
+			weights.DifferentSignature,
+		)
 	}
 
 	return nil

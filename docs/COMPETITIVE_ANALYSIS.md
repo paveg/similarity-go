@@ -119,20 +119,27 @@ function calculateSimilarity(ast1, ast2) {
 ```go
 // Multi-dimensional similarity analysis
 type StructuralComparison struct {
-    weightAST     float64  // 0.4 - AST structure similarity
-    weightTokens  float64  // 0.3 - Token similarity
-    weightFlow    float64  // 0.2 - Control flow similarity
-    weightSignature float64 // 0.1 - Function signature similarity
+    weightTreeEdit    float64 // 0.30 - AST tree edit distance
+    weightTokens      float64 // 0.30 - Token similarity
+    weightStructural  float64 // 0.25 - Structural heuristics
+    weightSignature   float64 // 0.15 - Function signature similarity
+    penaltySignature  float64 // 0.30 - Penalty for mismatched signatures
 }
 
 func (sc *StructuralComparison) Compare(f1, f2 *Function) (float64, error) {
-    astSim := sc.compareASTStructure(f1, f2)      // Tree edit distance
-    tokenSim := sc.compareTokenSequence(f1, f2)   // Jaccard coefficient
-    flowSim := sc.compareControlFlow(f1, f2)      // Control flow analysis
-    sigSim := sc.compareFunctionSignature(f1, f2) // Type signature
+    astSim := sc.compareASTStructure(f1, f2)       // Tree edit distance
+    tokenSim := sc.compareTokenSequence(f1, f2)    // Normalized tokens
+    structSim := sc.compareBodyStructure(f1, f2)   // Structural heuristics
+    sigSim := sc.compareFunctionSignature(f1, f2)  // Type signature
 
-    return astSim*sc.weightAST + tokenSim*sc.weightTokens +
-           flowSim*sc.weightFlow + sigSim*sc.weightSignature, nil
+    score := astSim*sc.weightTreeEdit + tokenSim*sc.weightTokens +
+        structSim*sc.weightStructural + sigSim*sc.weightSignature
+
+    if f1.Signature != f2.Signature {
+        score *= sc.penaltySignature
+    }
+
+    return score, nil
 }
 ```
 

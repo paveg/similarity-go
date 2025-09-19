@@ -33,6 +33,7 @@
   "yaml.validate": true,
   "cSpell.words": [
     "goast",
+    "golines",
     "gopkg",
     "similarityignore"
   ]
